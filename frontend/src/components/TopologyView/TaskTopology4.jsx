@@ -4,6 +4,8 @@ import useGNNStore from '../../store/useGNNStore'
 import usePlayerStore from '../../store/playerStore'
 import { easeInOutCubic } from '../../engine/interpolate'
 
+import { polygonHull } from 'd3-polygon'
+
 const COMMUNITY_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7', '#06b6d4', '#ec4899']
 
 export default function TaskTopology4() {
@@ -14,7 +16,7 @@ export default function TaskTopology4() {
   const fgRef = useRef()
   const [dimensions, setDimensions] = useState({ width: 800, height: 400 })
 
-  // 1. Cố định cấu trúc đồ thị
+  // 1. Fixed Graph Structure
   const graphData = useMemo(() => {
     if (!rawGraphData) return null
     return {
@@ -23,7 +25,7 @@ export default function TaskTopology4() {
     }
   }, [rawGraphData])
 
-  // 2. Cập nhật lực cộng đồng (Island Force)
+  // 2. Community Force (Island Force)
   useEffect(() => {
     if (fgRef.current && snapshots.length > 0 && graphData) {
         const epochInt = Math.max(0, Math.min(snapshots.length - 1, Math.floor(currentEpochFloat)))
@@ -32,23 +34,23 @@ export default function TaskTopology4() {
         
         const fg = fgRef.current
         const centers = [
-            { x: -180, y: -120 }, { x: 180, y: -120 },
-            { x: -180, y: 120 }, { x: 180, y: 120 },
-            { x: 0, y: -180 }, { x: 0, y: 180 }
+            { x: -220, y: -150 }, { x: 220, y: -150 },
+            { x: -220, y: 150 }, { x: 220, y: 150 },
+            { x: 0, y: -250 }, { x: 0, y: 250 },
+            { x: 0, y: 0 }
         ]
 
-        // Cài đặt lực kéo về tâm đảo cho từng node
         fg.d3Force('community', (alpha) => {
             graphData.nodes.forEach(node => {
                 const cid = preds[node.id] ?? 0
                 const center = centers[cid % centers.length]
-                // Apply velocity towards community center
-                node.vx += (center.x - node.x) * alpha * 0.05
-                node.vy += (center.y - node.y) * alpha * 0.05
+                // Apply velocity towards community center with higher strength (0.08)
+                node.vx += (center.x - node.x) * alpha * 0.08
+                node.vy += (center.y - node.y) * alpha * 0.08
             })
         })
         
-        // Kích hoạt lại simulation để các node di chuyển mượt mà
+        fg.d3Force('charge').strength(-120) // Push nodes apart within islands
         fg.d3ReheatSimulation()
     }
   }, [currentEpochFloat, snapshots, graphData])
@@ -62,7 +64,28 @@ export default function TaskTopology4() {
     return () => ro.disconnect()
   }, [])
 
-  // 3. Hàm vẽ Node với bảo vệ tọa độ
+  // 3. Convex Hulls Calculation
+  const communityHulls = useMemo(() => {
+    if (snapshots.length === 0 || !graphData) return []
+    const epochInt = Math.max(0, Math.min(snapshots.length - 1, Math.floor(currentEpochFloat)))
+    const snap = snapshots[epochInt]
+    const preds = snap?.node_predictions || []
+    
+    const communities = {}
+    graphData.nodes.forEach(node => {
+      const cid = preds[node.id] ?? 0
+      if (!communities[cid]) communities[cid] = []
+      communities[cid].push([node.x, node.y])
+    })
+
+    return Object.entries(communities).map(([cid, points]) => {
+      if (points.length < 3) return null
+      const hull = polygonHull(points)
+      return hull ? { cid: parseInt(cid), path: hull } : null
+    }).filter(Boolean)
+  }, [currentEpochFloat, snapshots, graphData])
+
+  // 4. Custom Drawing
   const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
     if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return
 
@@ -72,35 +95,62 @@ export default function TaskTopology4() {
     const isBridge = snap?.bridge_nodes?.[node.id] || false
     
     const color = COMMUNITY_COLORS[communityId % COMMUNITY_COLORS.length]
-    const size = Math.sqrt(node.degree || 1) * 1.5 + 4
+    const size = Math.sqrt(node.degree || 1) * 2 + 5
 
-    // Bridge Highlight
+    // Bridge Pulse Effect
     if (isBridge) {
+        const pulse = (Math.sin(Date.now() / 300) + 1) * 2;
         ctx.beginPath()
-        ctx.arc(node.x, node.y, size + 4, 0, 2 * Math.PI)
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)'
+        ctx.arc(node.x, node.y, size + 4 + pulse, 0, 2 * Math.PI)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'
         ctx.fill()
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'
-        ctx.lineWidth = 1.5 / globalScale
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 + pulse/10})`
+        ctx.lineWidth = 1/globalScale
         ctx.stroke()
     }
 
-    // Node Core
+    // Node Core with Gradient
+    const grad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, size)
+    grad.addColorStop(0, '#fff')
+    grad.addColorStop(0.2, color)
+    grad.addColorStop(1, 'rgba(0,0,0,0.2)')
+    
     ctx.beginPath()
     ctx.arc(node.x, node.y, size, 0, 2 * Math.PI)
-    ctx.fillStyle = color
+    ctx.fillStyle = grad
     ctx.fill()
-    
-    // Inner Light
-    try {
-        const grad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, size)
-        grad.addColorStop(0, 'rgba(255,255,255,0.3)')
-        grad.addColorStop(1, 'transparent')
-        ctx.fillStyle = grad
-        ctx.fill()
-    } catch(e) {}
 
+    // Community Label (only at higher zoom)
+    if (globalScale > 2) {
+        ctx.font = `bold ${10/globalScale}px Inter, sans-serif`
+        ctx.textAlign = 'center'
+        ctx.fillStyle = 'white'
+        ctx.fillText(`${node.id}`, node.x, node.y + size + 7/globalScale)
+    }
   }, [snapshots, currentEpochFloat])
+
+  // Drawing the Hulls (Background clouds)
+  const drawBefore = useCallback((ctx, globalScale) => {
+    communityHulls.forEach(hull => {
+      const color = COMMUNITY_COLORS[hull.cid % COMMUNITY_COLORS.length]
+      ctx.beginPath()
+      ctx.moveTo(hull.path[0][0], hull.path[0][1])
+      for (let i = 1; i < hull.path.length; i++) {
+        ctx.lineTo(hull.path[i][0], hull.path[i][1])
+      }
+      ctx.closePath()
+      
+      // Glassy bubble effect
+      ctx.lineJoin = 'round'
+      ctx.lineCap = 'round'
+      ctx.strokeStyle = `${color}44`
+      ctx.lineWidth = 40 / globalScale
+      ctx.stroke()
+      
+      ctx.fillStyle = `${color}11`
+      ctx.fill()
+    })
+  }, [communityHulls])
 
   if (!graphData) return null
 
@@ -115,61 +165,63 @@ export default function TaskTopology4() {
         height={dimensions.height}
         nodeCanvasObject={nodeCanvasObject}
         nodeCanvasObjectMode={() => 'replace'}
+        onRenderFramePre={drawBefore}
         linkColor={(link) => {
             const snap = snapshots[Math.floor(currentEpochFloat)] || snapshots[0]
             if (!snap) return 'rgba(148,163,184,0.05)'
             const srcComm = snap.node_predictions?.[link.source.id]
             const tgtComm = snap.node_predictions?.[link.target.id]
             return srcComm === tgtComm 
-                ? `rgba(148, 163, 184, 0.22)` 
-                : 'rgba(148, 163, 184, 0.03)'
+                ? `${COMMUNITY_COLORS[srcComm % COMMUNITY_COLORS.length]}33` 
+                : 'rgba(148, 163, 184, 0.05)'
         }}
         linkWidth={(link) => {
             const snap = snapshots[Math.floor(currentEpochFloat)] || snapshots[0]
             if (!snap) return 0.5
             const srcComm = snap.node_predictions?.[link.source.id]
             const tgtComm = snap.node_predictions?.[link.target.id]
-            return srcComm === tgtComm ? 1.2 : 0.4
+            return srcComm === tgtComm ? 1.5 : 0.5
         }}
-        cooldownTicks={80}
+        cooldownTicks={100}
         backgroundColor="transparent"
       />
 
       {/* Q HUD */}
-      <div className="absolute top-4 left-4 z-10">
-        <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl p-4 border border-slate-800 shadow-2xl min-w-[180px]">
-          <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest block mb-1">Modularity Q</span>
+      <div className="absolute top-6 left-6 z-10">
+        <div className="bg-slate-900/60 backdrop-blur-xl rounded-[2rem] p-6 border border-white/5 shadow-2xl min-w-[210px]">
+          <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest block mb-1">Detection Quality</span>
           <div className="flex items-baseline gap-2">
-            <span className={`text-3xl font-black font-mono ${modularityQ > 0.4 ? 'text-green-400' : 'text-yellow-400'}`}>
+            <span className={`text-4xl font-black font-mono tracking-tighter ${modularityQ > 0.4 ? 'text-green-400' : 'text-amber-400'}`}>
                 {modularityQ.toFixed(3)}
             </span>
-            <span className="text-[10px] text-slate-600 font-bold">/ 1.0</span>
+            <span className="text-xs text-slate-600 font-bold uppercase">Q-Score</span>
           </div>
-          <div className="w-full bg-slate-800 h-1.5 mt-3 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-yellow-500 to-green-500 transition-all duration-500" 
+          <div className="w-full bg-slate-800/50 h-2 mt-4 rounded-full overflow-hidden border border-white/5">
+            <div className="h-full bg-gradient-to-r from-amber-500 to-green-500 transition-all duration-700 shadow-[0_0_10px_rgba(34,197,94,0.3)]" 
                  style={{ width: `${modularityQ * 100}%` }} />
           </div>
         </div>
       </div>
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-slate-900/80 backdrop-blur-md rounded-xl p-3 border border-slate-800/50 z-10">
-        <div className="text-[9px] text-slate-500 font-bold uppercase mb-2">Community Islands</div>
-        <div className="flex gap-3 flex-wrap max-w-[200px]">
-          {COMMUNITY_COLORS.slice(0, 4).map((c, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
-              <span className="text-[10px] text-slate-400 font-mono">Island_{i}</span>
+      <div className="absolute bottom-6 left-6 bg-slate-900/40 backdrop-blur-md rounded-2xl p-4 border border-white/5 z-10">
+        <div className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-3">Community Structure</div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          {COMMUNITY_COLORS.slice(0, 6).map((c, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full shadow-[0_0_8px] shadow-current transition-all" style={{ backgroundColor: c, color: c }} />
+              <span className="text-[10px] text-slate-300 font-black font-mono uppercase tracking-tighter">Island_{i}</span>
             </div>
           ))}
         </div>
-        <div className="mt-3 pt-2 border-t border-slate-800 space-y-1">
-            <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full border border-white bg-white/20" />
-                <span className="text-[9px] text-slate-300 font-bold italic">Bridge / Gateway Node</span>
+        <div className="mt-4 pt-3 border-t border-white/5 space-y-2">
+            <div className="flex items-center gap-3">
+                <div className="w-4 h-4 rounded-full border border-white bg-white/10 animate-pulse" />
+                <span className="text-[10px] text-slate-200 font-black uppercase italic tracking-tight">Bridge Gateway</span>
             </div>
         </div>
       </div>
     </div>
   )
 }
+

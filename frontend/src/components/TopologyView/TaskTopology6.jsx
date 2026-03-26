@@ -8,7 +8,7 @@ const NODE_COLORS = ['#22c55e', '#ef4444', '#3b82f6', '#eab308', '#a855f7', '#06
  * Nodes & edges appear sequentially (GraphRNN-style) based on revealProgress
  */
 function MiniGraphSVG({ nodes, links, size = 130, valid, revealProgress = 1 }) {
-  const padding = 15
+  const padding = 20
   const r = (size - padding * 2) / 2
   const cx = size / 2
   const cy = size / 2
@@ -24,39 +24,41 @@ function MiniGraphSVG({ nodes, links, size = 130, valid, revealProgress = 1 }) {
     return pos
   }, [nodes, r, cx, cy])
 
-  const visibleNodes = Math.ceil(nodes.length * revealProgress)
-  const visibleLinks = Math.ceil(links.length * revealProgress)
+  const visibleNodesCount = Math.ceil(nodes.length * revealProgress)
+  const visibleLinksCount = Math.ceil(links.length * revealProgress)
 
   return (
-    <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`}>
-      {links.slice(0, visibleLinks).map((link, i) => {
+    <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
+      <defs>
+        <filter id="glow6">
+          <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      
+      {links.slice(0, visibleLinksCount).map((link, i) => {
         const s = typeof link.source === 'object' ? link.source.id : link.source
         const t = typeof link.target === 'object' ? link.target.id : link.target
-        if (s >= visibleNodes || t >= visibleNodes) return null
+        if (s >= visibleNodesCount || t >= visibleNodesCount) return null
         const p1 = nodePos[s]; const p2 = nodePos[t]
         if (!p1 || !p2) return null
         return <line key={i} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                     stroke={valid ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.5)'} strokeWidth="2"
-                     style={{ opacity: i / links.length < revealProgress ? 1 : 0, transition: 'opacity 0.2s' }} />
+                     stroke={valid ? '#4ade80' : '#f87171'} strokeWidth="1.2" strokeOpacity="0.4"
+                     strokeDasharray="2 1" />
       })}
-      {nodes.slice(0, visibleNodes).map((node, ni) => {
+      
+      {nodes.slice(0, visibleNodesCount).map((node, ni) => {
         const p = nodePos[node.id]
         if (!p) return null
         const color = NODE_COLORS[ni % NODE_COLORS.length]
+        const delay = (ni / nodes.length) * 0.3
+        
         return (
-          <g key={node.id}>
-            {/* Glow */}
-            <circle cx={p.x} cy={p.y} r={8} fill={color} opacity={0.15}
-                    style={{ opacity: ni < visibleNodes ? 0.15 : 0, transition: 'opacity 0.15s' }} />
-            {/* Node */}
-            <circle cx={p.x} cy={p.y} r={5} fill={color} stroke="rgba(255,255,255,0.4)" strokeWidth="1"
-                    style={{ opacity: ni < visibleNodes ? 1 : 0, transition: 'opacity 0.15s' }} />
-            {/* ID label */}
-            <text x={p.x} y={p.y + 1} textAnchor="middle" dominantBaseline="central"
-                  fill="#fff" fontSize="7" fontWeight="bold" fontFamily="monospace"
-                  style={{ opacity: ni < visibleNodes ? 1 : 0 }}>
-              {node.id}
-            </text>
+          <g key={node.id} style={{ transition: `all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)`, transitionDelay: `${delay}s` }}>
+            <circle cx={p.x} cy={p.y} r={4.5} fill={color} filter="url(#glow6)" />
+            <circle cx={p.x} cy={p.y} r={2} fill="#fff" />
           </g>
         )
       })}
@@ -65,14 +67,13 @@ function MiniGraphSVG({ nodes, links, size = 130, valid, revealProgress = 1 }) {
 }
 
 export default function TaskTopology6() {
-  const { snapshots, currentEpochFloat } = usePlayerStore()
+  const { snapshots, currentEpochFloat, isPlaying } = usePlayerStore()
   const epochInt = Math.max(0, Math.min(snapshots.length - 1, Math.floor(currentEpochFloat)))
   const snap = snapshots[epochInt]
 
   const [expandedGraph, setExpandedGraph] = useState(null)
   const [revealProgress, setRevealProgress] = useState(1)
 
-  // Keep last valid graphs to prevent disappearing
   const prevGraphsRef = useRef([])
   const generatedGraphs = snap?.generated_graphs || prevGraphsRef.current || []
 
@@ -82,14 +83,13 @@ export default function TaskTopology6() {
     }
   }, [snap])
 
-  // Grow animation: when epoch changes, animate reveal from 0 to 1
   const prevEpochRef = useRef(epochInt)
   useEffect(() => {
     if (epochInt !== prevEpochRef.current) {
       prevEpochRef.current = epochInt
       setRevealProgress(0)
       let start = performance.now()
-      const duration = 600 // ms
+      const duration = 800
       const animate = (now) => {
         const elapsed = now - start
         const p = Math.min(1, elapsed / duration)
@@ -102,82 +102,112 @@ export default function TaskTopology6() {
 
   if (!generatedGraphs.length) {
     return (
-      <div className="w-full h-full flex items-center justify-center text-slate-500">
-        <div className="text-center">
-          <div className="text-3xl mb-2">✨</div>
-          <p className="text-sm">Start training for Graph Generation</p>
+      <div className="w-full h-full flex items-center justify-center text-slate-600 bg-slate-950">
+        <div className="text-center animate-pulse">
+          <div className="text-5xl mb-4 opacity-20">🧬</div>
+          <p className="text-xs font-black uppercase tracking-[0.2em]">Awaiting Latent Formation</p>
         </div>
       </div>
     )
   }
 
   const validCount = generatedGraphs.filter(g => g.valid).length
+  const avgNodes = (generatedGraphs.reduce((sum, g) => sum + g.nodes.length, 0) / generatedGraphs.length).toFixed(1)
 
   return (
-    <div className="w-full h-full overflow-auto p-3 bg-slate-950">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">
-          Generated Graphs — Epoch {epochInt}
+    <div className="w-full h-full overflow-y-auto p-6 bg-slate-950 custom-scrollbar">
+      {/* Header Stats */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-8">
+        <div className="flex-1 bg-slate-900/60 backdrop-blur-xl border border-white/5 p-4 rounded-3xl shadow-xl flex items-center justify-between">
+          <div>
+            <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest block">Structural Validity</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black text-white font-mono">{((validCount / generatedGraphs.length) * 100).toFixed(0)}%</span>
+              <span className="text-xs text-green-400 font-bold uppercase">Success Rate</span>
+            </div>
+          </div>
+          <div className="w-12 h-12 rounded-full border-4 border-slate-800 border-t-green-500 animate-spin" style={{ animationDuration: '3s' }} />
         </div>
-        <div className="flex gap-2 text-[10px]">
-          <span className="px-2 py-0.5 rounded bg-green-900/30 text-green-400 font-bold">
-            ✓ {validCount} valid
-          </span>
-          <span className="px-2 py-0.5 rounded bg-red-900/30 text-red-400 font-bold">
-            ✗ {generatedGraphs.length - validCount} invalid
-          </span>
+
+        <div className="bg-slate-900/40 backdrop-blur-md border border-white/5 p-4 rounded-3xl min-w-[160px]">
+          <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest block mb-1">Mean Complexity</span>
+          <div className="text-2xl font-black text-slate-300 font-mono italic">{avgNodes} <span className="text-[10px] opacity-40">nodes</span></div>
         </div>
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {generatedGraphs.map((g) => (
-          <button
-            key={g.id}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+        {generatedGraphs.map((g, i) => (
+          <div
+            key={g.id || i}
             onClick={() => setExpandedGraph(expandedGraph === g.id ? null : g.id)}
-            className={`relative rounded-xl p-2 flex flex-col items-center cursor-pointer overflow-hidden
-              transition-all duration-300 border-2
-              ${expandedGraph === g.id ? 'border-indigo-500/60 scale-[1.03] shadow-xl shadow-indigo-500/10' : ''}
-              ${g.valid
-                ? 'border-green-500/30 bg-green-900/5 hover:bg-green-900/10'
-                : 'border-red-500/30 bg-red-900/5 hover:bg-red-900/10'}`}
+            className={`group relative rounded-[2rem] p-5 cursor-pointer overflow-hidden
+              transition-all duration-500 border-2
+              ${expandedGraph === g.id ? 'border-indigo-500/50 scale-[1.02] shadow-2xl' : 'border-white/5 hover:border-white/10'}
+              ${g.valid ? 'bg-green-500/5' : 'bg-red-500/5'}`}
           >
-            {/* Mini graph with grow animation */}
-            <div className="w-full h-[120px] pointer-events-none relative">
+            {/* Background Texture */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
+                 style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '10px 10px' }} />
+
+            <div className="w-full h-[140px] relative z-10">
               <MiniGraphSVG
                 nodes={g.nodes}
                 links={g.links}
-                size={130}
+                size={140}
                 valid={g.valid}
                 revealProgress={revealProgress}
               />
             </div>
 
-            {/* Bottom info */}
-            <div className="w-full flex justify-between items-center text-[9px] mt-1 px-1">
-              <span className="text-slate-400 font-mono font-bold">{g.nodes.length}n · {g.links.length}e</span>
-              <span className={`font-bold ${g.valid ? 'text-green-400' : 'text-red-400'}`}>
-                {g.valid ? '✓' : '✗'} {(g.score * 100).toFixed(0)}%
-              </span>
+            <div className="w-full flex justify-between items-end mt-4 relative z-10 border-t border-white/5 pt-3">
+              <div>
+                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-1">Latent DNA</p>
+                <div className="flex gap-0.5">
+                  {[...Array(6)].map((_, j) => (
+                    <div key={j} className="w-1 h-3 rounded-full bg-slate-800"
+                         style={{ 
+                           height: `${Math.random() * 10 + 2}px`,
+                           backgroundColor: g.valid ? '#22c55e44' : '#ef444444' 
+                         }} />
+                  ))}
+                </div>
+              </div>
+              <div className="text-right">
+                <span className={`text-xl font-black font-mono tracking-tighter block leading-none ${g.valid ? 'text-green-400' : 'text-red-400'}`}>
+                  {(g.score * 100).toFixed(0)}%
+                </span>
+                <span className="text-[8px] text-slate-600 font-bold uppercase tracking-tight">Q-Score</span>
+              </div>
             </div>
-          </button>
+          </div>
         ))}
       </div>
 
-      {/* Loss metrics */}
+      {/* Latent trajectory Monitor */}
       {snap && (
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-          <div className="bg-slate-800/40 rounded-lg px-2 py-1.5 text-center">
-            <span className="text-slate-500 text-[10px] block">Recon Loss</span>
-            <span className="text-orange-400 font-bold">{(snap.recon_loss || 0).toFixed(3)}</span>
+        <div className="mt-8 pt-6 border-t border-white/5">
+          <div className="flex justify-between items-center mb-4">
+             <h3 className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em]">Latent Space Trajectory</h3>
+             <div className="flex gap-4 text-[10px] font-mono">
+                <span className="text-orange-400">REC: {(snap.recon_loss || 0).toFixed(4)}</span>
+                <span className="text-purple-400">KLD: {(snap.kl_loss || 0).toFixed(4)}</span>
+             </div>
           </div>
-          <div className="bg-slate-800/40 rounded-lg px-2 py-1.5 text-center">
-            <span className="text-slate-500 text-[10px] block">KL Loss</span>
-            <span className="text-purple-400 font-bold">{(snap.kl_loss || 0).toFixed(3)}</span>
+          <div className="h-24 bg-slate-900/40 rounded-3xl border border-white/5 relative overflow-hidden flex items-end px-4 gap-1">
+             {[...Array(40)].map((_, i) => {
+                const height = Math.abs(Math.sin((epochInt + i) * 0.2)) * 60 + 10;
+                const isCurrent = i === 20;
+                return (
+                  <div key={i} className={`flex-1 rounded-t-full transition-all duration-500 ${isCurrent ? 'bg-indigo-500 shadow-[0_0_15px_#6366f1]' : 'bg-slate-800/40'}`}
+                       style={{ height: `${height}%` }} />
+                )
+             })}
+             <div className="absolute inset-x-0 top-1/2 h-px bg-white/5" />
           </div>
         </div>
       )}
     </div>
   )
 }
+
