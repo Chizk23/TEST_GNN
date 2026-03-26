@@ -9,13 +9,14 @@ const GRAPH_LABELS = ['Dense', 'Sparse']
 export default function ReadoutMonitor() {
   const hoveredGraphId = useGNNStore((s) => s.hoveredGraphId)
   const selectedNodeId = useGNNStore((s) => s.selectedNodeId)
+  const selectedGraphId = useGNNStore((s) => s.selectedGraphId)
   const taskData = useGNNStore((s) => s.taskData)
   
   // Use playerStore for synchronized animation state
   const { snapshots, currentEpochFloat } = usePlayerStore()
   
   // Support both hover and click selections
-  const activeGraphId = hoveredGraphId !== null ? hoveredGraphId : selectedNodeId
+  const activeGraphId = hoveredGraphId !== null ? hoveredGraphId : selectedGraphId
   
   const epochInt = Math.max(0, Math.min(snapshots.length - 1, Math.floor(currentEpochFloat)))
   const t = easeInOutCubic(Math.max(0, Math.min(1, currentEpochFloat - epochInt)))

@@ -26,6 +26,7 @@ const useGNNStore = create((set, get) => ({
 
   // ─── Selection / UI ──────────────────────────────────────────
   selectedNodeId: null,
+  selectedGraphId: null,
   hoveredGraphId: null,
   viewMode: 'prediction',
   attentionHead: 'avg',
@@ -72,6 +73,7 @@ const useGNNStore = create((set, get) => ({
   setTrainMask: (mask) => set({ trainMask: mask }),
   setTaskData: (td) => set({ taskData: td }),
   setSelectedNode: (id) => set({ selectedNodeId: id }),
+  setSelectedGraph: (id) => set({ selectedGraphId: id }),
 
   addInductiveNode: (newNode) => {
     const { graphData } = get()

@@ -200,9 +200,6 @@ function App() {
       <main className="flex-1 grid grid-cols-[3fr_2fr] grid-rows-2 gap-px bg-slate-800/30 overflow-hidden">
         {/* Topology View */}
         <div className="bg-slate-950 relative overflow-hidden">
-          <div className="panel-header absolute top-2 left-2 z-10 bg-slate-950/70 rounded px-1.5">
-            {taskLabels[selectedTask] || 'Topology View'}
-          </div>
           <ErrorBoundary>
             <TopologyRouter />
           </ErrorBoundary>
@@ -210,9 +207,6 @@ function App() {
 
         {/* Embedding View */}
         <div className="bg-slate-950 relative overflow-hidden">
-          <div className="panel-header absolute top-2 left-2 z-10 bg-slate-950/70 rounded px-1.5">
-            Embedding Space
-          </div>
           <ErrorBoundary>
             <EmbeddingRouter />
           </ErrorBoundary>
@@ -220,9 +214,6 @@ function App() {
 
         {/* Metrics Chart */}
         <div className="bg-slate-950 relative overflow-hidden">
-          <div className="panel-header absolute top-2 left-2 z-10 bg-slate-950/70 rounded px-1.5">
-            Metrics
-          </div>
           <ErrorBoundary>
             <MetricsChart />
           </ErrorBoundary>
@@ -230,7 +221,6 @@ function App() {
 
         {/* Info Panel */}
         <div className="bg-slate-950 border-l border-slate-800/30 overflow-hidden">
-          <div className="panel-header pt-2 pl-3">Node Info</div>
           <ErrorBoundary>
             <InfoRouter />
           </ErrorBoundary>
