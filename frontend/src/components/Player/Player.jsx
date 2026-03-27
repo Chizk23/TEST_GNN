@@ -112,7 +112,7 @@ export default function Player() {
           <Btn onClick={() => seekTo(maxFloat)} disabled={disabled} title="Go to end">⏭</Btn>
           
           <div className="ml-4 font-mono text-xs text-slate-400 min-w[60px]">
-            Ep: {currentEpochFloat.toFixed(1)}
+            Ep: {Math.floor(currentEpochFloat)}
           </div>
         </div>
 
