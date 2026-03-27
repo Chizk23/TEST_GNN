@@ -106,9 +106,9 @@ if (pred === undefined) return null
     )
   }
 
-  const gt = selectedTask === 2 ? null : groundTruth[selectedNodeId]
-  const pred = selectedTask === 2 ? null : snapshot.node_predictions[selectedNodeId]
-  const isCorrect = selectedTask === 2 ? true : gt === pred
+  const gt = selectedTask === 2 ? null : groundTruth?.[selectedNodeId] ?? null
+  const pred = selectedTask === 2 ? null : (snapshot?.node_predictions?.[selectedNodeId] ?? null)
+  const isCorrect = selectedTask === 2 ? true : (gt !== null && pred !== null && gt === pred)
   const node = activeGraph?.nodes?.find((n) => n.id === selectedNodeId)
   const className = gt !== null ? (CLASS_NAMES[gt] || `Class ${gt}`) : 'N/A'
   const predClassName = pred !== null ? (CLASS_NAMES[pred] || `Class ${pred}`) : 'N/A'

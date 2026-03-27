@@ -42,6 +42,7 @@ const useGNNStore = create((set, get) => ({
       isTraining: false,
       trainingProgress: 0,
       selectedNodeId: null,
+      selectedGraphId: null,  // Always clear graph selection on task switch
       // Clear data only if moving to/from tasks with incompatible graph formats (like Task 2/6)
       ...(needsReset ? {
         graphData: null,

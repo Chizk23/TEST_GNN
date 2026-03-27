@@ -196,7 +196,9 @@ export default function TaskTopology2() {
                     const pred = predictions[i], conf = confidenceScores[i] || 0, isCorrect = pred === g.groundTruth, hasResult = pred !== undefined;
                     return (
                         <div key={i} onClick={() => { setSelectedGraph(i); }}
-                             className={`group relative bg-slate-900/20 backdrop-blur-md rounded-[2rem] border-2 transition-all duration-300 cursor-pointer hover:border-blue-500/30 ${hasResult ? (isCorrect ? 'border-green-500/10' : 'border-red-500/10') : 'border-white/5'}`}>
+                             className={`group relative bg-slate-900/20 backdrop-blur-md rounded-[2rem] border-2 transition-all duration-300 cursor-pointer
+                                ${selectedGraphId === i ? 'border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.25)] scale-[1.02]' :
+                                hasResult ? (isCorrect ? 'border-green-500/10 hover:border-green-400/30' : 'border-red-500/10 hover:border-red-400/30') : 'border-white/5 hover:border-blue-500/30'}`}>
                             <div className="h-32 p-4 relative group">
                                 <MiniGraphSVG nodes={g.nodes} links={g.links} contributions={contributions[i]} size={120} />
                                 {/* Confidence Overlay on Hover */}

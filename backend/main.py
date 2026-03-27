@@ -183,6 +183,31 @@ async def train_websocket(websocket: WebSocket):
             })
             return
 
+        # ── Task 6: Graph Generation ───────────────────────────────────────
+        if task_id == 6:
+            dataset_name = config.get('dataset', 'cora')
+            data = load_dataset(dataset_name)
+            model_type = config.get('model', 'GCN')
+            
+            # Send graph structure so the frontend has context
+            graph_json = build_graph_json(data)
+            await websocket.send_json({
+                'type': 'graph_data',
+                'data': {
+                    'graphData': graph_json,
+                    'groundTruth': data.y.cpu().tolist(),
+                },
+            })
+            # Reuse graph_embedding backend as a generative autoencoder stub
+            epoch_snapshots = await run_graph_embedding(
+                config, data, model_type, websocket, stop_flag
+            )
+            await websocket.send_json({
+                'type': 'training_complete',
+                'all_snapshots': epoch_snapshots,
+            })
+            return
+
         # ── Task 1 (default): Node Classification ─────────────────────────
         dataset_name = config.get('dataset', 'cora')
         data = load_dataset(dataset_name)
