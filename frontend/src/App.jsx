@@ -30,6 +30,7 @@ import PairProximityView from './components/TopologyView/PairProximityView'
 import LinkMetricsPanel from './components/TopologyView/LinkMetricsPanel'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import DataInputView from './components/UploadPanel/DataInputView'
+import ProjectLibrary from './components/ProjectLibrary/ProjectLibrary'
 
 // Route to task-specific topology component
 function TopologyRouter() {
@@ -77,10 +78,15 @@ function App() {
   const mockMode = useGNNStore((s) => s.mockMode)
   const setMockMode = useGNNStore((s) => s.setMockMode)
   const setConfigOpen = useGNNStore((s) => s.setConfigOpen)
+  const activeProject = useGNNStore((s) => s.activeProject)
+  const projects = useGNNStore((s) => s.projects)
   const snapshots = usePlayerStore((s) => s.snapshots)
   const currentEpoch = usePlayerStore((s) => s.currentEpoch)
   const selectedTask = useGNNStore((s) => s.selectedTask)
   const snapshot = snapshots[currentEpoch]
+
+  const activeProjectName = projects.find(p => p.id === activeProject)?.name || 'Default Project'
+  // ... rest of code
 
   const [isDataInputOpen, setIsDataInputOpen] = useState(false)
 
@@ -147,6 +153,11 @@ function App() {
             GNN-INSIGHT
           </h1>
           <div className="w-px h-5 bg-slate-700" />
+          <div className="flex flex-col">
+            <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider leading-none">Project</span>
+            <span className="text-xs text-slate-300 font-bold leading-tight">{activeProjectName}</span>
+          </div>
+          <div className="w-px h-5 bg-slate-700" />
           <TaskSelector />
           <ModelSelector />
           <InductiveDemo />
@@ -184,6 +195,13 @@ function App() {
               }`}
           >
             {mockMode ? '🧪 Mock' : '🔌 Live'}
+          </button>
+
+          <button
+            onClick={() => useGNNStore.getState().setLibraryOpen(true)}
+            className="px-2 py-1 rounded text-[10px] font-medium transition-all bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+          >
+            📚 Library
           </button>
 
           <button
@@ -230,6 +248,7 @@ function App() {
       <Player />
       <TrainingControls />
       <ConfigPanel />
+      <ProjectLibrary />
       
       {isDataInputOpen && <DataInputView onClose={() => setIsDataInputOpen(false)} />}
     </div>

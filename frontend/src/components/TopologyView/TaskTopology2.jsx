@@ -38,6 +38,7 @@ function MiniGraphSVG({ nodes, links, contributions, size = 100 }) {
 export default function TaskTopology2() {
     const { snapshots, currentEpochFloat } = usePlayerStore()
     const taskData = useGNNStore((s) => s.taskData)
+    const dataVersion = useGNNStore((s) => s.dataVersion)
     const selectedGraphId = useGNNStore((s) => s.selectedGraphId)
     const setSelectedGraph = useGNNStore((s) => s.setSelectedGraph)
     const setSelectedNode = useGNNStore((s) => s.setSelectedNode)
@@ -59,7 +60,14 @@ export default function TaskTopology2() {
     const detailGraphData = useMemo(() => {
         if (selectedGraphId === null || !graphs[selectedGraphId]) return null;
         const g = graphs[selectedGraphId];
-        return { nodes: g.nodes.map(n => ({ ...n })), links: g.links.map(l => ({ ...l })) };
+        return { 
+            nodes: g.nodes.map(n => ({ ...n })), 
+            links: g.links.map(l => ({ 
+                ...l,
+                source: typeof l.source === 'object' ? l.source.id : l.source,
+                target: typeof l.target === 'object' ? l.target.id : l.target,
+            })) 
+        };
     }, [selectedGraphId, graphs]);
 
     useEffect(() => {
@@ -137,6 +145,7 @@ export default function TaskTopology2() {
 
                 <div ref={graphParentRef} className="flex-1 relative min-h-0 cursor-move">
                     <ForceGraph2D
+                        key={dataVersion}
                         ref={fgRefDetail}
                         width={dims.width}
                         height={dims.height}

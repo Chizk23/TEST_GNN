@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useEffect, useState } from 'react'
+import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react'
 import ForceGraph2D from 'react-force-graph-2d'
-import { forceCenter } from 'd3-force'
+import { forceCenter, forceManyBody, forceX, forceY, forceCollide } from 'd3-force'
 import useGNNStore from '../../store/useGNNStore'
 import usePlayerStore from '../../store/playerStore'
 import { easeInOutCubic } from '../../engine/interpolate'
@@ -10,7 +10,7 @@ const CLASS_COLORS = [
 ]
 
 export default function TopologyView() {
-  const { graphData: rawGraphData, viewMode, selectedModel, attentionHead, setAttentionHead, selectedNodeId, setSelectedNode, groundTruth } = useGNNStore()
+  const { graphData: rawGraphData, viewMode, selectedModel, attentionHead, setAttentionHead, selectedNodeId, setSelectedNode, groundTruth, dataVersion } = useGNNStore()
   const { snapshots, currentEpochFloat, trainingDone } = usePlayerStore()
   
   const graphParentRef = useRef()
@@ -27,9 +27,15 @@ export default function TopologyView() {
 
   const graphData = useMemo(() => {
     if (!rawGraphData) return null
+    // Deep-ish copy to prevent mutation issues, and force source/target back to IDs
     return {
       nodes: rawGraphData.nodes.map(n => ({ ...n })),
-      links: rawGraphData.links.map((l, i) => ({ ...l, _idx: i }))
+      links: rawGraphData.links.map((l, i) => ({ 
+        ...l, 
+        source: typeof l.source === 'object' ? l.source.id : l.source,
+        target: typeof l.target === 'object' ? l.target.id : l.target,
+        _idx: i 
+      }))
     }
   }, [rawGraphData])
 
@@ -43,16 +49,66 @@ export default function TopologyView() {
     return () => ro.disconnect()
   }, [])
 
-  // Robust centering and zoom-to-fit
+  // Force Layout Tuning
   useEffect(() => {
     if (fgRef.current && graphData) {
       const fg = fgRef.current
-      // Explicitly set center force to the middle of the current dimensions
+      
+      // Use the center of the current dimensions
       fg.d3Force('center', forceCenter(dims.width / 2, dims.height / 2))
+      
+      // Modify the EXISTING link force (don't create a new one — that causes 'node not found')
+      const existingLinkForce = fg.d3Force('link')
+      if (existingLinkForce) {
+        existingLinkForce
+          .distance(link => {
+            const s = typeof link.source === 'object' ? link.source.id : link.source
+            const t = typeof link.target === 'object' ? link.target.id : link.target
+            const sameClass = groundTruth?.[s] === groundTruth?.[t]
+            const progress = trainingDone ? 1 : Math.min(1, currentEpochFloat / (snapshots.length || 100))
+            return sameClass ? 35 - (20 * progress) : 55
+          })
+          .strength(0.7)
+      }
+      
+      fg.d3Force('charge', forceManyBody().strength(-150).distanceMax(300))
+      fg.d3Force('collide', forceCollide(d => (selectedNodeId === d.id ? 12 : 8)))
+
+      // Class-based positioning
+      if (groundTruth && snapshots.length > 0) {
+        const progress = trainingDone ? 1 : Math.min(1, currentEpochFloat / (snapshots.length || 100))
+        const pullStrength = 0.08 * progress
+        
+        fg.d3Force('x', forceX(dims.width / 2 + 0).strength(0.02)) // gentle pull to center
+        fg.d3Force('y', forceY(dims.height / 2 + 0).strength(0.02))
+
+        // Pull same labels to "islands"
+        fg.d3Force('classX', forceX(d => {
+          const label = groundTruth[d.id] || 0
+          const angle = (label * 2 * Math.PI) / 7
+          return (dims.width / 2) + Math.cos(angle) * 160 * progress
+        }).strength(pullStrength))
+
+        fg.d3Force('classY', forceY(d => {
+          const label = groundTruth[d.id] || 0
+          const angle = (label * 2 * Math.PI) / 7
+          return (dims.height / 2) + Math.sin(angle) * 160 * progress
+        }).strength(pullStrength))
+      }
+
       fg.d3ReheatSimulation()
-      setTimeout(() => fg.zoomToFit(400, 100), 100)
     }
-  }, [graphData, dims.width, dims.height])
+  }, [graphData, groundTruth, currentEpochFloat, trainingDone, snapshots.length, dims.width, dims.height])
+
+  // Center once when data is loaded
+  useEffect(() => {
+    if (fgRef.current && graphData && dims.width > 0) {
+        const fg = fgRef.current
+        fg.d3Force('center', forceCenter(dims.width / 2, dims.height / 2))
+        fg.d3ReheatSimulation()
+        setTimeout(() => fg.zoomToFit(400, 100), 150)
+    }
+  }, [graphData, dataVersion, dims.width, dims.height])
 
   // Focus when training is done
   useEffect(() => {
@@ -70,18 +126,18 @@ export default function TopologyView() {
 
     const pred = snapA.node_predictions?.[node.id] ?? 0
     const isErrorMode = animState.current.vmode === 'error'
-    const gt = groundTruth ? groundTruth?.[node.id] : null
+    const gt = (groundTruth && typeof groundTruth[node.id] !== 'undefined') ? groundTruth[node.id] : null
     const isCorrect = gt !== null && pred === gt
     
     let color = CLASS_COLORS[pred % CLASS_COLORS.length] || '#6366f1'
-    let size = (sid === node.id ? 7 : 4.5) + (node.degree || 0) * 0.4
+    let size = (sid !== null && sid === node.id ? 7 : 4.5) + (node.degree || 0) * 0.4
 
     if (isErrorMode && gt !== null) {
-      if (isCorrect) { color = '#10b981'; size *= 0.8 } // Correct nodes are smaller/greenish
-      else { color = '#ef4444'; size *= 1.2 }        // Error nodes are larger/red
+      if (isCorrect) { color = '#10b981'; size *= 0.8 } 
+      else { color = '#ef4444'; size *= 1.2 }        
     }
 
-    const isSelected = sid === node.id
+    const isSelected = sid !== null && sid === node.id
 
     if (isSelected) {
       ctx.beginPath(); ctx.arc(node.x, node.y, size + 4, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(34, 211, 238, 0.15)'; ctx.fill()
@@ -141,6 +197,7 @@ export default function TopologyView() {
 
       <div ref={graphParentRef} className="flex-1 relative min-h-0 cursor-move">
         <ForceGraph2D
+          key={dataVersion}
           ref={fgRef}
           width={dims.width}
           height={dims.height}
@@ -152,13 +209,19 @@ export default function TopologyView() {
             if (!snaps || snaps.length === 0) return
             const snap = snaps[Math.floor(cef)]
             if (!snap) return
+            
+            const s = typeof link.source === 'object' ? link.source : { id: link.source, x: 0, y: 0 }
+            const t = typeof link.target === 'object' ? link.target : { id: link.target, x: 0, y: 0 }
+            
+            if (!Number.isFinite(s.x) || !Number.isFinite(t.x)) return
+
             let weight = 0
             if (model === 'GAT' && snap.attention_weights) {
               if (head === 'avg') weight = snap.attention_weights[link._idx] || 0
               else { const hIdx = parseInt(head); weight = snap.attention_weights_per_head?.[hIdx]?.[link._idx] || snap.attention_weights[link._idx] || 0 }
             }
-            const color = sid !== null ? (link.source.id === sid || link.target.id === sid ? `rgba(34, 211, 238, 0.75)` : 'rgba(148,163,184,0.08)') : `rgba(59, 130, 246, ${0.15 + weight * 0.35})`
-            ctx.beginPath(); ctx.moveTo(link.source.x, link.source.y); ctx.lineTo(link.target.x, link.target.y)
+            const color = sid !== null ? (s.id === sid || t.id === sid ? `rgba(34, 211, 238, 0.75)` : 'rgba(148,163,184,0.08)') : `rgba(59, 130, 246, ${0.15 + weight * 0.35})`
+            ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y)
             ctx.strokeStyle = color; ctx.lineWidth = (0.8 + weight * 2.5) / globalScale; ctx.stroke()
           }}
           linkDirectionalParticles={(link) => {

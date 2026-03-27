@@ -34,9 +34,10 @@ export default function NodeInfoPanel() {
 
   const probs = useMemo(() => {
     if (selectedNodeId === null || !snapshot || selectedTask === 2) return null
-    let pred = snapshot.node_predictions[selectedNodeId]
-    if (pred === undefined && groundTruth) pred = groundTruth[selectedNodeId]
-if (pred === undefined) return null
+    let pred = snapshot.node_predictions?.[selectedNodeId]
+    if (typeof pred === 'undefined' && groundTruth) pred = groundTruth[selectedNodeId]
+    if (typeof pred === 'undefined' || pred === null) return null
+    
     const seed = selectedNodeId * 1000 + currentEpoch * 7 + pred * 31
     const p = Array(7).fill(0)
     p[pred] = 0.45 + seededRandom(seed) * 0.35
@@ -106,8 +107,8 @@ if (pred === undefined) return null
     )
   }
 
-  const gt = selectedTask === 2 ? null : groundTruth?.[selectedNodeId] ?? null
-  const pred = selectedTask === 2 ? null : (snapshot?.node_predictions?.[selectedNodeId] ?? null)
+  const gt = selectedTask === 2 ? null : (groundTruth && typeof groundTruth[selectedNodeId] !== 'undefined' ? groundTruth[selectedNodeId] : null)
+  const pred = selectedTask === 2 ? null : (snapshot?.node_predictions && typeof snapshot.node_predictions[selectedNodeId] !== 'undefined' ? snapshot.node_predictions[selectedNodeId] : null)
   const isCorrect = selectedTask === 2 ? true : (gt !== null && pred !== null && gt === pred)
   const node = activeGraph?.nodes?.find((n) => n.id === selectedNodeId)
   const className = gt !== null ? (CLASS_NAMES[gt] || `Class ${gt}`) : 'N/A'

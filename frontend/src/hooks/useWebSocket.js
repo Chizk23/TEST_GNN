@@ -31,19 +31,18 @@ export default function useWebSocket() {
       if (msg.type === 'graph_data') {
         const d = msg.data
 
-        // Task 1 & 3: node-level graph structure
+        // Always update primary graph data and ground truth if they exist in the message
         if (d.graphData) {
           setGraphData(d.graphData)
         }
-        // Task 1 & 3: ground truth node labels
         if (d.groundTruth) {
           setGroundTruth(d.groundTruth)
         }
-        // Task 2: synthetic graphs list
+        
+        // Task-specific data
         if (d.graphs) {
           setTaskData({ graphs: d.graphs })
         }
-        // Task 3: test edges for link prediction (merged with graphs if both present)
         if (d.testEdges && !d.graphs) {
           setTaskData({ testEdges: d.testEdges })
         }

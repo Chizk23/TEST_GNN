@@ -99,14 +99,14 @@ export default function EmbeddingSpaceB() {
 
   useEffect(() => { if (dataReady) drawCanvas() }, [dataReady, drawCanvas])
 
-  if ((!dataReady && !graphDataRef.current) || snapshotsRef.current.length === 0) {
+  if ((!dataReady && !graphDataRef.current) || snapshots.length === 0) {
     return ( <div className="w-full h-full flex items-center justify-center text-slate-500 text-xs bg-slate-950/20 backdrop-blur-sm rounded-xl"><p className="animate-pulse">Waiting for training cycle...</p></div> )
   }
 
   return (
     <div ref={containerRef} className="relative flex flex-col h-full bg-slate-950/20 backdrop-blur-sm rounded-xl border border-slate-800/40 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 bg-slate-900/50 border-b border-slate-800/50 backdrop-blur-md z-20">
-        <div className="flex items-center gap-3"><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]" />Embedding Space</h3><div className="h-3 w-px bg-white/10" /><span className="text-[9px] font-black text-slate-500 font-mono">EPOCH <span className="text-white">{epochRef.current}</span></span></div>
+        <div className="flex items-center gap-3"><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]" />Embedding Space</h3><div className="h-3 w-px bg-white/10" /><span className="text-[9px] font-black text-slate-500 font-mono">EPOCH <span className="text-white">{epochInt}</span></span></div>
         <div className="flex items-center gap-3">{silhouetteRef.current !== 0 && ( <div className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-[8px] font-black text-amber-400 uppercase tracking-tighter">Silhouette: {silhouetteRef.current.toFixed(3)}</div> )}<div className="flex bg-slate-950/50 rounded-lg p-0.5 border border-slate-800/50"><button onClick={() => setProjMode(projMode === 'pca' ? 'tsne' : 'pca')} className="px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all text-slate-400 hover:text-white">{projMode}</button><div className="w-px h-2 bg-white/10 self-center mx-1" /><button onClick={() => setShowTrajectory(!showTrajectory)} className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${showTrajectory ? 'text-indigo-400' : 'text-slate-600'}`}>Trail</button></div></div>
       </div>
       <div ref={canvasParentRef} className="flex-1 relative min-h-0"><canvas ref={canvasRef} style={{ width: dims.width, height: dims.height }} className="w-full h-full" /><div className="absolute bottom-3 left-4 flex gap-3 pointer-events-none">{COMMUNITY_COLORS.slice(0, 3).map((c, i) => ( <div key={i} className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: c }} /><span className="text-[8px] text-slate-600 font-black font-mono">Group {i}</span></div> ))}</div></div>

@@ -11,6 +11,7 @@ const COMMUNITY_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7',
 export default function TaskTopology4() {
   const rawGraphData = useGNNStore(s => s.graphData)
   const { snapshots, currentEpochFloat, trainingDone } = usePlayerStore()
+  const dataVersion = useGNNStore(s => s.dataVersion)
   const graphParentRef = useRef()
   const fgRef = useRef()
   const selectedNodeId = useGNNStore(s => s.selectedNodeId)
@@ -20,7 +21,12 @@ export default function TaskTopology4() {
     if (!rawGraphData) return null
     return {
       nodes: rawGraphData.nodes.map(n => ({ ...n })),
-      links: rawGraphData.links.map((l, i) => ({ ...l, _idx: i }))
+      links: rawGraphData.links.map((l, i) => ({ 
+        ...l, 
+        source: typeof l.source === 'object' ? l.source.id : l.source,
+        target: typeof l.target === 'object' ? l.target.id : l.target,
+        _idx: i 
+      }))
     }
   }, [rawGraphData])
 
@@ -132,6 +138,7 @@ export default function TaskTopology4() {
       </div>
       <div ref={graphParentRef} className="flex-1 relative min-h-0">
         <ForceGraph2D
+          key={dataVersion}
           ref={fgRef}
           graphData={graphData}
           width={dims.width}

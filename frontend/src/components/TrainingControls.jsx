@@ -90,6 +90,8 @@ export default function TrainingControls() {
         task: selectedTask,
         model: useGNNStore.getState().selectedModel,
         dataset: hyperparams.dataset || 'cora',
+        dataset_id: hyperparams.dataset,
+        project_id: useGNNStore.getState().activeProject,
         epochs: hyperparams.epochs,
         lr: hyperparams.lr,
         hidden: hyperparams.hidden,

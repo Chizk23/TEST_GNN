@@ -130,6 +130,7 @@ export default function DataInputView({ onClose }) {
         nodes: nodesData,
         edges: edgesData,
         graphs: graphsData.length > 0 ? graphsData : null,
+        project_name: 'Uploaded Project',
         mapping: {
           task: task,
           ...mapping
@@ -155,8 +156,20 @@ export default function DataInputView({ onClose }) {
       
       // Update store to exit Mock Mode
       setMockMode(false)
-      useGNNStore.getState().setTask(task)
-      useGNNStore.getState().setTaskData(configRes.graph_json)
+      const store = useGNNStore.getState()
+      store.setTask(task)
+      
+      if (configRes.graph_json?.graphData) {
+        store.setGraphData(configRes.graph_json.graphData)
+      }
+      if (configRes.graph_json?.groundTruth) {
+        store.setGroundTruth(configRes.graph_json.groundTruth)
+      }
+      
+      store.setHyperparams({ dataset: 'custom_upload' })
+      store.setTaskData(configRes.graph_json)
+      
+      if (store.fetchProjects) store.fetchProjects()
       
       onClose()
     } catch (e) {

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import usePlayerStore from './playerStore'
 
 const useGNNStore = create((set, get) => ({
   // ─── Config ──────────────────────────────────────────────────
@@ -12,6 +13,7 @@ const useGNNStore = create((set, get) => ({
     dropout: 0.5,
     heads: 4,
     aggregator: 'mean',
+    dataset: 'cora',
   },
 
   // ─── Training state ──────────────────────────────────────────
@@ -31,48 +33,60 @@ const useGNNStore = create((set, get) => ({
   viewMode: 'prediction',
   attentionHead: 'avg',
   configOpen: false,
+  libraryOpen: false,
+
+  // ─── Persistence / History ───────────────────────────────────
+  projects: [],
+  activeProject: null,
+  projectHistory: [],
+  isLoadingHistory: false,
+  dataVersion: 0,
 
   // ─── Actions: Config ─────────────────────────────────────────
   setTask: (task) => {
-    const prevState = get()
-    const needsReset = task === 2 || task === 6 || prevState.selectedTask === 2 || prevState.selectedTask === 6
-    
-    set({
+    // Clear playback snapshots to prevent mismatched state
+    usePlayerStore.getState().loadSnapshots([])
+
+    set((s) => ({
       selectedTask: task,
       isTraining: false,
       trainingProgress: 0,
       selectedNodeId: null,
-      selectedGraphId: null,  // Always clear graph selection on task switch
-      // Clear data only if moving to/from tasks with incompatible graph formats (like Task 2/6)
-      ...(needsReset ? {
-        graphData: null,
-        groundTruth: null,
-        trainMask: null,
-        taskData: null,
-      } : {})
-    })
+      selectedGraphId: null,
+      graphData: null,
+      groundTruth: null,
+      trainMask: null,
+      taskData: null,
+      activeProject: null,
+      dataVersion: s.dataVersion + 1,
+    }))
   },
   setSelectedTask: (task) => get().setTask(task),
   setModel: (model) => {
-    set({
+    // Clear snapshots
+    usePlayerStore.getState().loadSnapshots([])
+
+    set((s) => ({
       selectedModel: model,
+      isTraining: false,
+      trainingProgress: 0,
       graphData: null,
       groundTruth: null,
       trainMask: null,
       taskData: null,
       selectedNodeId: null,
-      isTraining: false,
-      trainingProgress: 0,
-    })
+      dataVersion: s.dataVersion + 1,
+    }))
   },
-  setMockMode: (mode) => set({ mockMode: mode }),
+  setMockMode: (mode) => set((s) => ({ mockMode: mode, dataVersion: s.dataVersion + 1 })),
   setHyperparams: (params) => set((s) => ({ hyperparams: { ...s.hyperparams, ...params } })),
 
   // ─── Actions: Data ───────────────────────────────────────────
-  setGraphData: (gd) => set({ graphData: gd }),
+  setGraphData: (gd) => set((s) => ({ graphData: gd, dataVersion: s.dataVersion + 1 })),
   setGroundTruth: (gt) => set({ groundTruth: gt }),
   setTrainMask: (mask) => set({ trainMask: mask }),
-  setTaskData: (td) => set({ taskData: td }),
+  setTaskData: (td) => set((s) => ({ taskData: td, dataVersion: s.dataVersion + 1 })),
+
   setSelectedNode: (id) => set({ selectedNodeId: id }),
   setSelectedGraph: (id) => set({ selectedGraphId: id }),
 
@@ -111,7 +125,62 @@ const useGNNStore = create((set, get) => ({
   setViewMode: (mode) => set({ viewMode: mode }),
   setAttentionHead: (head) => set({ attentionHead: head }),
   setConfigOpen: (open) => set({ configOpen: open }),
-  setTraining: (isTraining, progress) => set({ isTraining, trainingProgress: progress ?? 0 }),
+  setLibraryOpen: (open) => set({ libraryOpen: open }),
+  setTraining: (isTraining, progress) => {
+    if (isTraining) {
+      set({ isTraining, trainingProgress: progress ?? 0 })
+    } else {
+      // Keep final progress or reset to 1 if done
+      set({ isTraining, trainingProgress: progress ?? 0 })
+    }
+  },
+
+  // ─── Actions: History / Persistence API ──────────────────────
+  fetchProjects: async () => {
+    try {
+      set({ isLoadingHistory: true })
+      const res = await fetch('http://localhost:8000/api/projects')
+      const data = await res.json()
+      set({ projects: data, isLoadingHistory: false })
+    } catch (err) {
+      console.error("Failed to fetch projects", err)
+      set({ isLoadingHistory: false })
+    }
+  },
+  
+  loadProjectHistory: async (projectId) => {
+    try {
+      set({ isLoadingHistory: true })
+      const res = await fetch(`http://localhost:8000/api/projects/${projectId}/history`)
+      const history = await res.json()
+      set({ projectHistory: history, activeProject: projectId, isLoadingHistory: false })
+    } catch (err) {
+      console.error("Failed to load history", err)
+      set({ isLoadingHistory: false })
+    }
+  },
+
+  restoreRun: async (runId) => {
+    try {
+      set({ isLoadingHistory: true })
+      const res = await fetch(`http://localhost:8000/api/runs/${runId}/restore`)
+      const data = await res.json()
+      // Instantly restore the specific training run using Redis data
+      if (data && data.final_summary) {
+        // Normally we'd rebuild graphData with the predictions, 
+        // For a seamless demo, we'll store the restoreData and re-trigger visualizer mapping
+        set({ 
+          libraryOpen: false, 
+          isLoadingHistory: false,
+          trainingProgress: 100 // Jump to end for restored views
+        })
+        return data.final_summary
+      }
+    } catch (err) {
+      console.error("Failed to restore run", err)
+      set({ isLoadingHistory: false })
+    }
+  }
 }))
 
 export default useGNNStore

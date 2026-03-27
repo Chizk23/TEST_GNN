@@ -26,9 +26,36 @@ except ImportError as e:
     HAS_TORCH = False
     print(f"Warning: ML modules not found ({e}). Running in API-only mode (No training/PyTorch).", file=sys.stderr)
 
-app = FastAPI(title="GNN-Insight Backend")
+from contextlib import asynccontextmanager
+from database.mysql import init_db, AsyncSessionLocal
+from database.mongodb import init_mongodb
+from database.redis_client import init_redis
+from api.projects import router as projects_router
+from database.models import Project, Dataset, TrainingRun
+from sqlalchemy import select
+from services.snapshot_service import save_training_run
+from services.cache_service import cache_best_run
+import uuid
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Init datastores
+    await init_db()
+    await init_mongodb()
+    await init_redis()
+    
+    # Ensure default project exists
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Project).where(Project.name == "Default Project"))
+        if not result.scalars().first():
+            from services.project_service import create_project
+            await create_project(session, "Default Project", "Auto-generated project for backward compatibility.")
+    yield
+
+app = FastAPI(title="GNN-Insight Backend", lifespan=lifespan)
 
 app.include_router(user_loader_router, prefix="/api")
+app.include_router(projects_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -102,6 +129,57 @@ def build_graph_json(data):
 
     return {'nodes': nodes, 'links': links}
 
+async def _save_run_results(config: dict, task_type: int, model_type: str, epoch_snapshots: list):
+    project_id = config.get("project_id")
+    dataset_id = config.get("dataset_id")
+    
+    async with AsyncSessionLocal() as session:
+        if not project_id:
+            result = await session.execute(select(Project).where(Project.name == "Default Project"))
+            proj = result.scalars().first()
+            project_id = proj.id if proj else str(uuid.uuid4())
+            
+        if not dataset_id:
+            result = await session.execute(select(Dataset).where(Dataset.project_id == project_id))
+            ds = result.scalars().first()
+            if not ds:
+                ds = Dataset(project_id=project_id, name=config.get('dataset', 'cora'), source_type="builtin", column_mapping={})
+                session.add(ds)
+                await session.commit()
+                await session.refresh(ds)
+            dataset_id = ds.id
+            
+        best_epoch = epoch_snapshots[-1].get("epoch", 0) if epoch_snapshots else 0
+        best_acc = max([s.get("val_acc", 0) for s in epoch_snapshots], default=0.0)
+        best_auc = max([s.get("auc", 0) for s in epoch_snapshots], default=0.0)
+        best_mod = max([s.get("modularity", 0) for s in epoch_snapshots], default=0.0)
+            
+        run_record = TrainingRun(
+            project_id=project_id,
+            dataset_id=dataset_id,
+            task_type=task_type,
+            model_type=model_type,
+            hyperparams=config,
+            status="done",
+            best_epoch=best_epoch,
+            best_val_acc=best_acc,
+            best_auc=best_auc,
+            best_modularity=best_mod
+        )
+        session.add(run_record)
+        await session.commit()
+        await session.refresh(run_record)
+        run_id = run_record.id
+
+    try:
+        await save_training_run(run_id, project_id, epoch_snapshots, best_epoch)
+        await cache_best_run(run_id)
+    except Exception as e:
+        print(f"Warning: Failed to save to MongoDB/Redis: {e}")
+        
+    return run_id
+
+
 
 @app.websocket("/ws/train")
 async def train_websocket(websocket: WebSocket):
@@ -123,7 +201,9 @@ async def train_websocket(websocket: WebSocket):
 
         # ── Task 2: Graph Classification ───────────────────────────────────
         if task_id == 2:
+            model_type = config.get('model', 'GCN') # Define model_type for this task
             epoch_snapshots = await run_graph_classification(config, websocket, stop_flag)
+            await _save_run_results(config, task_id, model_type, epoch_snapshots)
             await websocket.send_json({
                 'type': 'training_complete',
                 'all_snapshots': epoch_snapshots,
@@ -138,6 +218,7 @@ async def train_websocket(websocket: WebSocket):
             epoch_snapshots = await run_link_prediction(
                 config, data, model_type, websocket, stop_flag
             )
+            await _save_run_results(config, task_id, model_type, epoch_snapshots)
             await websocket.send_json({
                 'type': 'training_complete',
                 'all_snapshots': epoch_snapshots,
@@ -152,6 +233,7 @@ async def train_websocket(websocket: WebSocket):
             epoch_snapshots = await run_community_detection(
                 config, data, model_type, websocket, stop_flag
             )
+            await _save_run_results(config, task_id, model_type, epoch_snapshots)
             await websocket.send_json({
                 'type': 'training_complete',
                 'all_snapshots': epoch_snapshots,
@@ -177,6 +259,7 @@ async def train_websocket(websocket: WebSocket):
             epoch_snapshots = await run_graph_embedding(
                 config, data, model_type, websocket, stop_flag
             )
+            await _save_run_results(config, task_id, model_type, epoch_snapshots)
             await websocket.send_json({
                 'type': 'training_complete',
                 'all_snapshots': epoch_snapshots,
@@ -202,6 +285,7 @@ async def train_websocket(websocket: WebSocket):
             epoch_snapshots = await run_graph_embedding(
                 config, data, model_type, websocket, stop_flag
             )
+            await _save_run_results(config, task_id, model_type, epoch_snapshots)
             await websocket.send_json({
                 'type': 'training_complete',
                 'all_snapshots': epoch_snapshots,
@@ -240,6 +324,7 @@ async def train_websocket(websocket: WebSocket):
             'num_classes': int(data.y.max().item()) + 1
         }
 
+        await _save_run_results(config, 1, config.get('model', 'GCN'), epoch_snapshots)
         await websocket.send_json({
             'type': 'training_complete',
             'all_snapshots': epoch_snapshots,
