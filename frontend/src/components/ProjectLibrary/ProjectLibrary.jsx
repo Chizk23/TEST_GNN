@@ -16,7 +16,7 @@ export default function ProjectLibrary() {
   } = useGNNStore()
 
   useEffect(() => {
-    if (libraryOpen && projects.length === 0) {
+    if (libraryOpen) {
       fetchProjects()
     }
   }, [libraryOpen])

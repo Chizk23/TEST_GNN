@@ -123,14 +123,14 @@ export default function NodeInfoPanel() {
           <div className="bg-slate-900/50 rounded-lg p-2.5 border border-slate-800/50 shadow-inner">
             <span className="text-slate-500 text-[8px] block uppercase tracking-wider mb-1 font-black">Label</span>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CLASS_COLORS[gt], boxShadow: `0 0 8px ${CLASS_COLORS[gt]}44` }} />
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: gt !== null ? CLASS_COLORS[gt % CLASS_COLORS.length] : '#64748b', boxShadow: gt !== null ? `0 0 8px ${CLASS_COLORS[gt % CLASS_COLORS.length]}44` : 'none' }} />
               <span className="font-bold text-slate-200 truncate">{className}</span>
             </div>
           </div>
           <div className={`rounded-lg p-2.5 border border-white/5 transition-colors ${isCorrect ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
             <span className="text-slate-500 text-[8px] block uppercase tracking-wider mb-1 font-black">Predicted</span>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CLASS_COLORS[pred] }} />
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: pred !== null ? CLASS_COLORS[pred % CLASS_COLORS.length] : '#64748b' }} />
               <span className={`font-bold truncate ${isCorrect ? 'text-green-400' : 'text-red-400'}`}>
                 {predClassName}
               </span>
@@ -181,7 +181,7 @@ export default function NodeInfoPanel() {
                 <div key={i} className="flex items-center gap-3">
                   <span className="w-3 text-[8px] text-slate-500 font-black font-mono">{i}</span>
                   <div className="flex-1 bg-slate-950 h-1 rounded-full relative overflow-hidden">
-                    <div className="h-full transition-all duration-700 ease-out" style={{ width: `${p * 100}%`, backgroundColor: CLASS_COLORS[i], boxShadow: i === pred ? `0 0 8px ${CLASS_COLORS[i]}` : 'none', opacity: i === pred ? 1 : 0.3 }} />
+                    <div className="h-full transition-all duration-700 ease-out" style={{ width: `${p * 100}%`, backgroundColor: CLASS_COLORS[i % CLASS_COLORS.length], boxShadow: i === pred ? `0 0 8px ${CLASS_COLORS[i % CLASS_COLORS.length]}` : 'none', opacity: i === pred ? 1 : 0.3 }} />
                   </div>
                   <span className={`w-8 text-right font-mono text-[9px] ${i === pred ? 'text-white font-black' : 'text-slate-600'}`}>{(p * 100).toFixed(0)}%</span>
                 </div>
@@ -200,8 +200,8 @@ export default function NodeInfoPanel() {
                 onClick={() => setSelectedNode(nid)}
                 className="w-10 h-10 rounded-full flex items-center justify-center text-[11px] font-black text-white transition-all shadow-lg active:scale-90 relative group"
                 style={{ 
-                  backgroundColor: (selectedTask === 2 ? '#6366f1' : (groundTruth ? CLASS_COLORS[groundTruth[nid]] : '#64748b')),
-                  boxShadow: `0 4px 12px ${(selectedTask === 2 ? '#6366f1' : (groundTruth ? CLASS_COLORS[groundTruth[nid]] : '#475569'))}44`,
+                  backgroundColor: (selectedTask === 2 ? '#6366f1' : (groundTruth && typeof groundTruth[nid] !== 'undefined' ? CLASS_COLORS[groundTruth[nid] % CLASS_COLORS.length] : '#64748b')),
+                  boxShadow: `0 4px 12px ${(selectedTask === 2 ? '#6366f1' : (groundTruth && typeof groundTruth[nid] !== 'undefined' ? CLASS_COLORS[groundTruth[nid] % CLASS_COLORS.length] : '#475569'))}44`,
                   border: '2px solid rgba(255,255,255,0.2)'
                 }}
               >

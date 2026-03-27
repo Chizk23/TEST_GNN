@@ -14,6 +14,7 @@ const TASKS = [
 export default function DataInputView({ onClose }) {
   const [step, setStep] = useState(1)
   const [task, setTask] = useState(1)
+  const [projectName, setProjectName] = useState('New Graph Project')
   const setMockMode = useGNNStore(s => s.setMockMode)
 
   // File data states
@@ -130,7 +131,7 @@ export default function DataInputView({ onClose }) {
         nodes: nodesData,
         edges: edgesData,
         graphs: graphsData.length > 0 ? graphsData : null,
-        project_name: 'Uploaded Project',
+        project_name: projectName,
         mapping: {
           task: task,
           ...mapping
@@ -166,8 +167,12 @@ export default function DataInputView({ onClose }) {
         store.setGroundTruth(configRes.graph_json.groundTruth)
       }
       
-      store.setHyperparams({ dataset: 'custom_upload' })
+      store.setHyperparams({ dataset: configRes.dataset_id || 'custom_upload' })
       store.setTaskData(configRes.graph_json)
+      
+      if (configRes.project_id) {
+        useGNNStore.setState({ activeProject: configRes.project_id })
+      }
       
       if (store.fetchProjects) store.fetchProjects()
       
@@ -211,6 +216,16 @@ export default function DataInputView({ onClose }) {
         <div className="flex-1 overflow-auto p-6">
           {step === 1 && (
             <div className="space-y-6">
+              <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Project Name</label>
+                <input 
+                  type="text" 
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="Enter project name..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
+                />
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {['nodes', 'edges', 'graphs'].map(type => {
                   const data = type==='nodes' ? nodesData : type==='edges' ? edgesData : graphsData

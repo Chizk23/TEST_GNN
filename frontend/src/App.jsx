@@ -132,7 +132,9 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const valAcc = snapshot ? (snapshot.val_acc * 100).toFixed(1) : '--'
+  const valAcc = snapshot 
+    ? ((snapshot.overall_acc ?? snapshot.val_acc) * 100).toFixed(1) 
+    : '--'
   const trainLoss = snapshot ? snapshot.train_loss.toFixed(3) : '--'
 
   const taskLabels = {

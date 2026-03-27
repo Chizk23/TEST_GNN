@@ -6,6 +6,7 @@ import numpy as np
 from torch_geometric.data import Data
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'datasets')
+CUSTOM_DATASETS = {}
 
 
 def load_cora():

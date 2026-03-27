@@ -61,13 +61,32 @@ async def get_history(project_id: str, db: AsyncSession = Depends(get_db)):
     } for r in runs]
 
 @router.get("/runs/{run_id}/restore")
-async def restore_run(run_id: str):
+async def restore_run(run_id: str, db: AsyncSession = Depends(get_db)):
     """
     Fetch the lightweight visualization snapshot for instant UI restore
+    Also fetches graph_json so the 3D visualizer can rebuild the network
     """
     data = await get_cached_run(run_id)
     if not data:
         raise HTTPException(status_code=404, detail="Run data not found")
+        
+    run_record = await db.scalar(select(TrainingRun).where(TrainingRun.id == run_id))
+    if run_record:
+        data['task_type'] = run_record.task_type
+        data['model_type'] = run_record.model_type
+        
+        dataset_record = await db.scalar(select(Dataset).where(Dataset.id == run_record.dataset_id))
+        if dataset_record:
+            try:
+                from main import load_dataset, build_graph_json
+                # load_dataset takes name or id
+                ds_name = dataset_record.id if dataset_record.source_type == 'upload' else dataset_record.name
+                ds_data = load_dataset(ds_name)
+                data['graph_json'] = build_graph_json(ds_data)
+                data['ground_truth'] = ds_data.y.cpu().tolist()
+            except Exception as e:
+                print("Could not load graph for restore:", e)
+
     return data
 
 @router.get("/runs/{run_id}/replay")

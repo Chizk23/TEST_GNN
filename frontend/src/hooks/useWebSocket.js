@@ -56,6 +56,15 @@ export default function useWebSocket() {
         setTraining(false, 1)
         setDone(msg.all_snapshots.length - 1)
 
+        // Auto-refresh library if it's open to show the new run immediately
+        const state = useGNNStore.getState()
+        if (state.libraryOpen) {
+          state.fetchProjects()
+          if (state.activeProject) {
+            state.loadProjectHistory(state.activeProject)
+          }
+        }
+
       } else if (msg.type === 'error') {
         console.error('Training error:', msg.message)
         console.error(msg.traceback)

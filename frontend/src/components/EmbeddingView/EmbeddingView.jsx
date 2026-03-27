@@ -37,10 +37,14 @@ function MiniGraphPopup({ graph, position }) {
                     stroke="rgba(148,163,184,0.2)" strokeWidth="1" />
             ) : null
           })}
-          {nodes.map((n) => nodePos[n.id] ? (
-            <circle key={n.id} cx={nodePos[n.id].x} cy={nodePos[n.id].y}
-                    r="4" fill="#6366f1" />
-          ) : null)}
+          {nodes.map((n, i) => {
+            const pos = nodePos[n.id]
+            if (!pos) return null
+            const color = CLASS_COLORS[i % CLASS_COLORS.length]
+            return (
+              <circle key={n.id} cx={pos.x} cy={pos.y} r="4" fill={color} />
+            )
+          })}
         </svg>
         <div className="text-[8px] text-center text-slate-400 mt-0.5">
           {nodes.length}n · {links.length}e
@@ -193,7 +197,7 @@ export default function EmbeddingView() {
     const preds = currSnap.node_predictions || []
     const x = emb.map((p) => p[0])
     const y = emb.map((p) => p[1])
-    const colors = preds.map((c) => CLASS_COLORS[c] || '#94a3b8')
+    const colors = preds.map((c) => CLASS_COLORS[c % CLASS_COLORS.length] || '#94a3b8')
     const sizes = emb.map((_, i) => i === selectedNodeId ? 12 : 6)
     const opacities = emb.map((_, i) => i === selectedNodeId ? 1.0 : 0.82)
 

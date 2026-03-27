@@ -165,15 +165,25 @@ const useGNNStore = create((set, get) => ({
       set({ isLoadingHistory: true })
       const res = await fetch(`http://localhost:8000/api/runs/${runId}/restore`)
       const data = await res.json()
-      // Instantly restore the specific training run using Redis data
       if (data && data.final_summary) {
-        // Normally we'd rebuild graphData with the predictions, 
-        // For a seamless demo, we'll store the restoreData and re-trigger visualizer mapping
         set({ 
           libraryOpen: false, 
           isLoadingHistory: false,
-          trainingProgress: 100 // Jump to end for restored views
+          trainingProgress: 100, // Jump to end for restored views
+          selectedTask: data.task_type || get().selectedTask,
+          selectedModel: data.model_type || get().selectedModel,
         })
+        
+        if (data.graph_json) {
+          set({ graphData: data.graph_json, groundTruth: data.ground_truth })
+        }
+        
+        // Load the snapshot into the player so it actually visually shows
+        usePlayerStore.getState().loadSnapshots([{
+            ...data.final_summary,
+            epoch: data.best_epoch
+        }])
+        
         return data.final_summary
       }
     } catch (err) {

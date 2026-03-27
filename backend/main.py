@@ -14,7 +14,7 @@ try:
     from models.gcn import GCNModel
     from models.gat import GATModel
     from models.graphsage import GraphSAGEModel
-    from data.loaders import load_cora, load_citeseer, load_csv, get_available_datasets
+    from data.loaders import load_cora, load_citeseer, load_csv, get_available_datasets, CUSTOM_DATASETS
     from tasks.node_classification import run_node_classification
     from tasks.graph_classification import run_graph_classification
     from tasks.link_prediction import run_link_prediction
@@ -59,7 +59,7 @@ app.include_router(projects_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -99,6 +99,9 @@ def build_model(config, data=None, num_features=None, num_classes=None):
 
 
 def load_dataset(name):
+    # Check custom uploaded datasets first
+    if name in CUSTOM_DATASETS:
+        return CUSTOM_DATASETS[name]
     if name == 'cora':
         return load_cora()
     elif name == 'citeseer':
@@ -135,9 +138,20 @@ async def _save_run_results(config: dict, task_type: int, model_type: str, epoch
     
     async with AsyncSessionLocal() as session:
         if not project_id:
-            result = await session.execute(select(Project).where(Project.name == "Default Project"))
-            proj = result.scalars().first()
-            project_id = proj.id if proj else str(uuid.uuid4())
+            # Safe resolution from dataset_id if project_id is missing from config
+            if dataset_id:
+                ds_res = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
+                ds_rec = ds_res.scalars().first()
+                if ds_rec:
+                    project_id = ds_rec.project_id
+            
+            if not project_id:
+                result = await session.execute(select(Project).where(Project.name == "Default Project"))
+                proj = result.scalars().first()
+                if not proj:
+                    from services.project_service import create_project
+                    proj = await create_project(session, "Default Project", "Auto-generated project")
+                project_id = proj.id
             
         if not dataset_id:
             result = await session.execute(select(Dataset).where(Dataset.project_id == project_id))
@@ -148,12 +162,13 @@ async def _save_run_results(config: dict, task_type: int, model_type: str, epoch
                 await session.commit()
                 await session.refresh(ds)
             dataset_id = ds.id
-            
         best_epoch = epoch_snapshots[-1].get("epoch", 0) if epoch_snapshots else 0
-        best_acc = max([s.get("val_acc", 0) for s in epoch_snapshots], default=0.0)
+
+        # Use overall_acc (entire graph) as requested
+        best_acc = max([s.get("overall_acc", s.get("val_acc", 0)) for s in epoch_snapshots], default=0.0)
         best_auc = max([s.get("auc", 0) for s in epoch_snapshots], default=0.0)
         best_mod = max([s.get("modularity", 0) for s in epoch_snapshots], default=0.0)
-            
+
         run_record = TrainingRun(
             project_id=project_id,
             dataset_id=dataset_id,
@@ -162,11 +177,17 @@ async def _save_run_results(config: dict, task_type: int, model_type: str, epoch
             hyperparams=config,
             status="done",
             best_epoch=best_epoch,
-            best_val_acc=best_acc,
+            best_val_acc=best_acc, # This column in MySQL will store our "Best Score"
             best_auc=best_auc,
             best_modularity=best_mod
         )
         session.add(run_record)
+
+        # Increment total runs count for the project 
+        proj_to_update = await session.scalar(select(Project).where(Project.id == project_id))
+        if proj_to_update:
+            proj_to_update.total_runs = (proj_to_update.total_runs or 0) + 1
+
         await session.commit()
         await session.refresh(run_record)
         run_id = run_record.id
@@ -212,7 +233,7 @@ async def train_websocket(websocket: WebSocket):
 
         # ── Task 3: Link Prediction ────────────────────────────────────────
         if task_id == 3:
-            dataset_name = config.get('dataset', 'cora')
+            dataset_name = config.get('dataset_id') or config.get('dataset', 'cora')
             data = load_dataset(dataset_name)
             model_type = config.get('model', 'GCN')
             epoch_snapshots = await run_link_prediction(
@@ -227,7 +248,7 @@ async def train_websocket(websocket: WebSocket):
 
         # ── Task 4: Community Detection ────────────────────────────────────
         if task_id == 4:
-            dataset_name = config.get('dataset', 'cora')
+            dataset_name = config.get('dataset_id') or config.get('dataset', 'cora')
             data = load_dataset(dataset_name)
             model_type = config.get('model', 'GCN')
             epoch_snapshots = await run_community_detection(
@@ -242,7 +263,7 @@ async def train_websocket(websocket: WebSocket):
 
         # ── Task 5: Graph Embedding ────────────────────────────────────────
         if task_id == 5:
-            dataset_name = config.get('dataset', 'cora')
+            dataset_name = config.get('dataset_id') or config.get('dataset', 'cora')
             data = load_dataset(dataset_name)
             model_type = config.get('model', 'GCN')
             
@@ -268,7 +289,7 @@ async def train_websocket(websocket: WebSocket):
 
         # ── Task 6: Graph Generation ───────────────────────────────────────
         if task_id == 6:
-            dataset_name = config.get('dataset', 'cora')
+            dataset_name = config.get('dataset_id') or config.get('dataset', 'cora')
             data = load_dataset(dataset_name)
             model_type = config.get('model', 'GCN')
             
@@ -293,7 +314,7 @@ async def train_websocket(websocket: WebSocket):
             return
 
         # ── Task 1 (default): Node Classification ─────────────────────────
-        dataset_name = config.get('dataset', 'cora')
+        dataset_name = config.get('dataset_id') or config.get('dataset', 'cora')
         data = load_dataset(dataset_name)
         model = build_model(config, data)
         optimizer = torch.optim.Adam(

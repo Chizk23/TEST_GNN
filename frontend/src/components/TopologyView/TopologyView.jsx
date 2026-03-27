@@ -4,10 +4,7 @@ import { forceCenter, forceManyBody, forceX, forceY, forceCollide } from 'd3-for
 import useGNNStore from '../../store/useGNNStore'
 import usePlayerStore from '../../store/playerStore'
 import { easeInOutCubic } from '../../engine/interpolate'
-
-const CLASS_COLORS = [
-  '#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7', '#06b6d4', '#ec4899', '#f97316', '#10b981',
-]
+import { CLASS_COLORS } from '../../utils/colors'
 
 export default function TopologyView() {
   const { graphData: rawGraphData, viewMode, selectedModel, attentionHead, setAttentionHead, selectedNodeId, setSelectedNode, groundTruth, dataVersion } = useGNNStore()
@@ -129,7 +126,7 @@ export default function TopologyView() {
     const gt = (groundTruth && typeof groundTruth[node.id] !== 'undefined') ? groundTruth[node.id] : null
     const isCorrect = gt !== null && pred === gt
     
-    let color = CLASS_COLORS[pred % CLASS_COLORS.length] || '#6366f1'
+    let color = CLASS_COLORS[pred % CLASS_COLORS.length]
     let size = (sid !== null && sid === node.id ? 7 : 4.5) + (node.degree || 0) * 0.4
 
     if (isErrorMode && gt !== null) {
@@ -250,7 +247,7 @@ export default function TopologyView() {
 
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/60 backdrop-blur-md rounded-full px-4 py-1.5 border border-slate-800/40 z-10 pointer-events-none shadow-xl">
           <div className="flex items-center gap-4">
-            {CLASS_COLORS.slice(0, 7).map((c, i) => (
+            {CLASS_COLORS.map((c, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: c }} />
                 <span className="text-[8px] text-slate-500 font-black font-mono">C{i}</span>

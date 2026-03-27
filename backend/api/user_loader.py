@@ -5,6 +5,9 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 import networkx as nx
+import uuid
+import torch
+from torch_geometric.data import Data
 
 router = APIRouter()
 
@@ -25,6 +28,7 @@ class ConfigurePayload(BaseModel):
     edges: List[Dict[str, Any]]
     graphs: Optional[List[Dict[str, Any]]] = None
     mapping: MappingConfig
+    project_name: Optional[str] = "New Project"
 
 @router.post("/configure")
 async def configure_dataset(payload: ConfigurePayload):
@@ -69,6 +73,8 @@ async def configure_dataset(payload: ConfigurePayload):
             encoder = LabelEncoder()
             labels = encoder.fit_transform(df_nodes[m.node_label].fillna('Unknown')).astype(int).tolist()
             num_classes = len(encoder.classes_)
+
+
 
         # 4. Extract Graphs for Output JSON 
         # (For Demo purpose, Frontend uses 'graph_json' to display the layout)
@@ -120,8 +126,80 @@ async def configure_dataset(payload: ConfigurePayload):
                     "numEdges": len(e_list)
                 })
 
+        # ── Database Persistence ──────────────────────────────────────────
+        from database.mysql import AsyncSessionLocal
+        from database.models import Project, Dataset
+        from sqlalchemy import select
+
+        project_id = None
+        dataset_id = f"upload_{uuid.uuid4().hex[:8]}"
+        try:
+            async with AsyncSessionLocal() as session:
+                # Find or create Project
+                stmt = select(Project).where(Project.name == payload.project_name)
+                res = await session.execute(stmt)
+                proj = res.scalars().first()
+                if not proj:
+                    proj = Project(name=payload.project_name, description=f"Custom dataset · Task {m.task}")
+                    session.add(proj)
+                    await session.commit()
+                    await session.refresh(proj)
+                project_id = proj.id
+
+                # Create Dataset record
+                ds = Dataset(
+                    id=dataset_id,
+                    project_id=project_id,
+                    name=payload.project_name,
+                    source_type="upload",
+                    column_mapping=m.dict(),
+                    node_count=num_nodes,
+                    edge_count=num_edges,
+                    feature_dim=len(m.node_features) if m.node_features else 1,
+                    num_classes=num_classes
+                )
+                session.add(ds)
+                proj.total_runs = (proj.total_runs or 0) + 1
+                await session.commit()
+        except Exception as db_err:
+            print(f"Warning: DB persistence failed: {db_err}")
+            # Non-fatal — graph viz still works without DB
+
+        # ── PyG Data Object (for training) ────────────────────────────────
+        x_tensor = torch.tensor(features, dtype=torch.float)
+        y_tensor = torch.tensor(labels, dtype=torch.long)
+        edge_index_tensor = torch.tensor([
+            [int(e['source']) for e in edges_json],
+            [int(e['target']) for e in edges_json]
+        ], dtype=torch.long)
+
+        n = num_nodes
+        perm = np.random.permutation(n)
+        train_mask = torch.zeros(n, dtype=torch.bool)
+        val_mask   = torch.zeros(n, dtype=torch.bool)
+        test_mask  = torch.zeros(n, dtype=torch.bool)
+        train_mask[perm[:int(0.6 * n)]] = True
+        val_mask[perm[int(0.6 * n):int(0.8 * n)]] = True
+        test_mask[perm[int(0.8 * n):]] = True
+
+        data_obj = Data(
+            x=x_tensor,
+            edge_index=edge_index_tensor,
+            y=y_tensor,
+            train_mask=train_mask,
+            val_mask=val_mask,
+            test_mask=test_mask
+        )
+
+        # Store in-memory for training
+        from data.loaders import CUSTOM_DATASETS
+        CUSTOM_DATASETS[dataset_id] = data_obj
+
         return {
             "status": "success",
+            "dataset_id": dataset_id,
+            "project_id": project_id,
+            "project_name": payload.project_name,
             "metadata": {
                 "task": m.task,
                 "num_nodes": num_nodes,

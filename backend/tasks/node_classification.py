@@ -42,6 +42,9 @@ async def run_node_classification(config, data, model, optimizer, websocket, sto
             pred = out_eval.argmax(dim=1)
             val_acc = (pred[data.val_mask] == data.y[data.val_mask]).float().mean()
             train_acc = (pred[data.train_mask] == data.y[data.train_mask]).float().mean()
+            
+            # Overall accuracy for the entire graph
+            overall_acc = (pred == data.y).float().mean()
 
         # ── PCA Reduction ───────────────────────────────────────────────────
         emb_np = embedding_eval.cpu().numpy()
@@ -69,6 +72,7 @@ async def run_node_classification(config, data, model, optimizer, websocket, sto
             'val_loss': float(val_loss.item()),
             'train_acc': float(train_acc.item()),
             'val_acc': float(val_acc.item()),
+            'overall_acc': float(overall_acc.item()),
         }
         epoch_snapshots.append(snapshot)
 
