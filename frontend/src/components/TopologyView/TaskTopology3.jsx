@@ -23,8 +23,10 @@ export default function TaskTopology3() {
   const [showNodes, setShowNodes] = useState(true)
   const [showTriangles, setShowTriangles] = useState(true)
   const [dimensions, setDimensions] = useState({ width: 800, height: 400 })
+  const [stableGraphData, setStableGraphData] = useState(null)
   const containerRef = useRef()
   const fgRef = useRef()
+  const fitPendingRef = useRef(false)
   const trianglesRef = useRef([])
 
   // 1. Cố định cấu trúc đồ thị
@@ -37,6 +39,15 @@ export default function TaskTopology3() {
   }, [rawGraphData])
 
   useEffect(() => {
+    if (graphData?.nodes?.length) {
+      setStableGraphData(graphData)
+      fitPendingRef.current = true
+    }
+  }, [graphData])
+
+  const activeGraphData = stableGraphData || graphData
+
+  useEffect(() => {
     if (!containerRef.current) return
     const ro = new ResizeObserver(([e]) => {
       if (e.contentRect.width > 0) setDimensions({ width: e.contentRect.width, height: e.contentRect.height })
@@ -46,12 +57,12 @@ export default function TaskTopology3() {
   }, [])
 
   useEffect(() => {
-    if (!fgRef.current || !graphData) return
+    if (!fgRef.current || !activeGraphData) return
     const fg = fgRef.current
     fg.d3Force('charge')?.strength(-100).distanceMax(250)
     fg.d3Force('link')?.distance(35)
     fg.d3ReheatSimulation()
-  }, [graphData])
+  }, [activeGraphData])
 
   // 2. Hàm vẽ Cạnh với NỘI SUY ĐIỂM SỐ (Interpolated Scores)
   const linkCanvasObject = useCallback((link, ctx) => {
@@ -158,7 +169,16 @@ export default function TaskTopology3() {
     }
   }, [snapshots, currentEpochFloat, taskData, selectedModel, showTriangles, rawGraphData])
 
-  if (!graphData) return null
+  if (!activeGraphData) {
+    return (
+      <div className="flex h-full items-center justify-center bg-slate-950 text-slate-500">
+        <div className="text-center">
+          <div className="mb-2 text-3xl opacity-60">o-o</div>
+          <div className="text-xs uppercase tracking-[0.24em]">Dang tai lien ket...</div>
+        </div>
+      </div>
+    )
+  }
 
   const auc = snapshots[Math.floor(currentEpochFloat)]?.auc || 0.5
 
@@ -166,7 +186,7 @@ export default function TaskTopology3() {
     <div ref={containerRef} className="w-full h-full relative bg-slate-950 overflow-hidden">
       <ForceGraph2D
         ref={fgRef}
-        graphData={graphData}
+        graphData={activeGraphData}
         width={dimensions.width}
         height={dimensions.height}
         nodeCanvasObject={(node, ctx, globalScale) => {
@@ -206,49 +226,55 @@ export default function TaskTopology3() {
         nodeCanvasObjectMode={() => 'replace'}
         linkCanvasObject={linkCanvasObject}
         linkCanvasObjectMode={() => 'replace'}
+        onEngineStop={() => {
+          if (fitPendingRef.current && fgRef.current) {
+            fitPendingRef.current = false
+            try {
+              fgRef.current.zoomToFit(420, 72)
+            } catch {
+              // Ignore transient fit errors while the layout is settling.
+            }
+          }
+        }}
+        warmupTicks={30}
         cooldownTicks={100}
         backgroundColor="transparent"
       />
 
-      <div className="absolute top-4 left-4 z-20 flex gap-2">
+      <div className="absolute top-12 left-2 z-20 flex gap-2">
         <button onClick={() => setShowNodes(!showNodes)} 
-                className={`px-4 py-2 rounded-xl text-[10px] font-bold border transition-all ${showNodes ? 'bg-slate-900/80 border-slate-700 text-slate-400' : 'bg-indigo-600/20 border-indigo-500 text-indigo-400'}`}>
-          {showNodes ? '🧬 HIDE NODES' : '👻 SHOW NODES'}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${showNodes ? 'bg-slate-900/80 border-slate-700 text-slate-400' : 'bg-indigo-600/20 border-indigo-500 text-indigo-400'}`}>
+          {showNodes ? '🧬 HIDE' : '👻 SHOW'}
         </button>
         {selectedModel === 'GAT' && (
           <button onClick={() => setShowTriangles(!showTriangles)} 
-                  className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${showTriangles ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400' : 'bg-slate-900/80 border-slate-700 text-slate-500'}`}>
-            △ Triangles {showTriangles ? 'ON' : 'OFF'}
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${showTriangles ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400' : 'bg-slate-900/80 border-slate-700 text-slate-500'}`}>
+            △ {showTriangles ? 'ON' : 'OFF'}
           </button>
         )}
       </div>
 
-      <div className="absolute bottom-4 right-4 z-10 flex flex-col items-end gap-3 w-64">
-        <div className="bg-slate-900/90 backdrop-blur-md rounded-xl p-3 border border-slate-700/50 shadow-2xl w-full flex justify-between items-center">
-            <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Link AUC-ROC</span>
-            <span className={`text-xl font-black font-mono leading-none ${auc > 0.85 ? 'text-green-500' : auc > 0.7 ? 'text-yellow-500' : 'text-red-500'}`}>
+      <div className="absolute bottom-2 right-2 z-10 flex flex-col items-end gap-1.5 w-40">
+        <div className="bg-slate-900/90 backdrop-blur-md rounded-lg px-2.5 py-1.5 border border-slate-700/50 w-full flex justify-between items-center">
+            <span className="text-[8px] text-slate-400 uppercase font-bold tracking-wider">AUC-ROC</span>
+            <span className={`text-sm font-black font-mono leading-none ${auc > 0.85 ? 'text-green-500' : auc > 0.7 ? 'text-yellow-500' : 'text-red-500'}`}>
                 {auc.toFixed(3)}
             </span>
         </div>
 
-        <div className="bg-slate-900/90 backdrop-blur-md rounded-xl p-3 border border-slate-700/50 shadow-2xl w-full text-[9px]">
-          <div className="text-slate-500 font-bold uppercase mb-2 tracking-tighter">Link Prediction Overlay</div>
-          <div className="space-y-2">
+        <div className="bg-slate-900/90 backdrop-blur-md rounded-lg px-2.5 py-1.5 border border-slate-700/50 w-full text-[8px]">
+          <div className="space-y-1">
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2"><div className="w-3 h-1.5 bg-red-600 rounded" /><span className="text-slate-300 font-bold">Positive Link</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-2.5 h-1 bg-red-600 rounded" /><span className="text-slate-300 font-bold">Positive</span></div>
                 <span className="text-slate-500">&gt; 0.7</span>
             </div>
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2"><div className="w-3 h-1.5 bg-yellow-500 rounded" /><span className="text-slate-300">Uncertain</span></div>
-                <span className="text-slate-500">0.3 - 0.7</span>
+                <div className="flex items-center gap-1.5"><div className="w-2.5 h-1 bg-yellow-500 rounded" /><span className="text-slate-300">Uncertain</span></div>
+                <span className="text-slate-500">0.3-0.7</span>
             </div>
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2"><div className="w-3 h-1.5 bg-blue-500 rounded" /><span className="text-slate-300">Negative</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-2.5 h-1 bg-blue-500 rounded" /><span className="text-slate-300">Negative</span></div>
                 <span className="text-slate-500">&lt; 0.3</span>
-            </div>
-            <div className="border-t border-slate-800 pt-1.5 mt-1 flex items-center justify-between">
-                <div className="flex items-center gap-2"><div className="w-3 border-t border-dashed border-yellow-500" /><span className="text-yellow-500 font-black">Future Link</span></div>
-                <span className="text-slate-500 font-mono">NEW</span>
             </div>
           </div>
         </div>

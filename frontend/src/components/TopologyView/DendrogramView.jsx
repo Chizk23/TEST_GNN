@@ -63,7 +63,7 @@ export default function DendrogramView() {
     ctx.clearRect(0, 0, width, height)
 
     const { communities, commIds } = dendroData
-    const padding = { top: 30, bottom: 20, left: 20, right: 20 }
+    const padding = { top: 40, bottom: 20, left: 20, right: 20 }
     const treeW = width - padding.left - padding.right
     const treeH = height - padding.top - padding.bottom
 
@@ -175,11 +175,7 @@ export default function DendrogramView() {
       }
     })
 
-    // Title
-    ctx.fillStyle = '#94a3b8'
-    ctx.font = 'bold 10px sans-serif'
-    ctx.textAlign = 'left'
-    ctx.fillText(`Community Hierarchy — Epoch ${epochInt} | K=${commIds.length}`, padding.left, 14)
+    // (Title handled by PanelHeading in App.jsx)
 
   }, [dendroData, dims, epochInt, snap])
 

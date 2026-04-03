@@ -230,33 +230,7 @@ export default function PairProximityView() {
       }
     })
 
-    // ── Title + stats ──
-    // Semi-transparent header bar
-    ctx.fillStyle = '#0f172aCC'
-    ctx.fillRect(0, 0, width, 28)
-
-    ctx.fillStyle = '#e2e8f0'
-    ctx.font = 'bold 11px sans-serif'
-    ctx.textAlign = 'left'
-    ctx.fillText(`Node Embedding — Epoch ${epochInt}`, 10, 17)
-
-    // Edge counts
-    const posCount = posEdges.length
-    const negCount = negEdges.length
-    ctx.font = 'bold 10px monospace'
-    ctx.textAlign = 'right'
-    ctx.fillStyle = '#60a5fa'
-    ctx.fillText(`━ ${posCount} pos`, width - 80, 17)
-    ctx.fillStyle = '#f87171'
-    ctx.fillText(`╌ ${negCount} neg`, width - 10, 17)
-
-    // Zoom indicator
-    if (zoom !== 1) {
-      ctx.fillStyle = '#94a3b8'
-      ctx.font = '9px monospace'
-      ctx.textAlign = 'left'
-      ctx.fillText(`🔍 ${zoom.toFixed(1)}x`, 10, height - 8)
-    }
+    // (Header removed — handled by PanelHeading in App.jsx)
 
   }, [dims, hoveredNode, zoom, pan, showNegative, showPositive])
 
@@ -377,20 +351,18 @@ export default function PairProximityView() {
         </button>
       </div>
 
-      {/* Legend — bottom left */}
-      <div className="absolute bottom-2 left-2 bg-slate-900/90 backdrop-blur-md rounded-xl px-2.5 py-2 border border-slate-700/40 z-10 text-[9px]">
-        <div className="text-[7px] text-slate-500 uppercase font-bold tracking-wider mb-1.5">Test Edges</div>
-        <div className="flex items-center gap-2 text-blue-400 mb-1">
-          <div className="w-5 h-0.5 bg-blue-500 rounded-full" /> Positive (exists)
-        </div>
-        <div className="flex items-center gap-2 text-red-400 mb-1">
-          <div className="w-5 h-0 border-t border-dashed border-red-500" /> Negative (none)
-        </div>
-        <div className="flex items-center gap-2 text-slate-500">
-          <span className="w-2.5 h-2.5 rounded-full bg-slate-600" /> Non-test node
-        </div>
-        <div className="text-[7px] text-slate-600 mt-1.5 border-t border-slate-800 pt-1">
-          Scroll = zoom · Shift+drag = pan
+      {/* Legend — bottom left compact */}
+      <div className="absolute bottom-1.5 left-1.5 bg-slate-900/90 backdrop-blur-md rounded-lg px-2 py-1.5 border border-slate-700/40 z-10 text-[8px]">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-blue-400">
+            <div className="w-4 h-0.5 bg-blue-500 rounded-full" /> Pos
+          </div>
+          <div className="flex items-center gap-1.5 text-red-400">
+            <div className="w-4 h-0 border-t border-dashed border-red-500" /> Neg
+          </div>
+          <div className="flex items-center gap-1.5 text-slate-500">
+            <span className="w-2 h-2 rounded-full bg-slate-600" /> Other
+          </div>
         </div>
       </div>
 

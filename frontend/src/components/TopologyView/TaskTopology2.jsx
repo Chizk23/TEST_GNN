@@ -90,7 +90,7 @@ export default function TaskTopology2() {
         if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
 
         const graphContribs = contributions[selectedGraphIdx] || [];
-        const weight = graphContribs[node.index] || 0;
+        const weight = graphContribs[node.id] || 0;
         
         const color = weight > 0.8 ? '#ffffff' : weight > 0.5 ? '#f59e0b' : '#3b82f6';
         const size = (4 + weight * 12) / Math.sqrt(globalScale);
@@ -142,93 +142,106 @@ export default function TaskTopology2() {
         }
     }, [selectedGraphIdx]);
 
-    if (!graphs.length) return null;
+    // Compute detail data (always, no conditional returns before this)
+    const showDetail = selectedGraphIdx !== null && detailGraphData && graphs.length > 0;
+    const g = showDetail ? graphs[selectedGraphIdx] : null;
+    const pred = showDetail ? predictions[selectedGraphIdx] : undefined;
+    const isCorrect = showDetail ? pred === g.groundTruth : false;
+    const conf = showDetail ? (confidenceScores[selectedGraphIdx] || 0.5) : 0;
 
-    if (selectedGraphIdx !== null && detailGraphData) {
-        const g = graphs[selectedGraphIdx]
-        const pred = predictions[selectedGraphIdx]
-        const isCorrect = pred === g.groundTruth
-        const conf = confidenceScores[selectedGraphIdx] || 0.5
+    if (!graphs.length) {
+        return <div className="w-full h-full flex items-center justify-center text-slate-500 text-xs">No graph data</div>;
+    }
 
+    if (showDetail) {
         return (
-            <div className="w-full h-full relative bg-slate-950 overflow-hidden">
-                {/* Overlay UI */}
-                <div className="absolute top-4 left-4 z-20 flex flex-col gap-4 pointer-events-none">
-                    <button onClick={() => setSelectedGraphIdx(null)}
-                            className="pointer-events-auto px-4 py-2 rounded-xl text-[11px] font-black tracking-widest bg-slate-900/40 text-slate-300 hover:bg-slate-800/60 transition-all border border-slate-800/50 backdrop-blur-xl shadow-2xl uppercase">
-                        ← Exit Analysis
-                    </button>
-                    
-                    <div className="bg-slate-900/60 backdrop-blur-2xl border border-white/5 p-5 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] min-w-[260px]">
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h2 className="text-xl font-black text-white leading-tight uppercase tracking-tight">{GRAPH_LABELS[g.groundTruth]}</h2>
-                                <p className="text-[10px] text-slate-500 font-bold font-mono">ID: #{selectedGraphIdx} | {g.numNodes}n / {g.numEdges}e</p>
-                            </div>
-                            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border ${isCorrect ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
-                                <span className="text-lg font-black">{isCorrect ? '✓' : '✗'}</span>
-                            </div>
-                        </div>
+            <div key="detail_view" className="w-full h-full relative bg-slate-950 overflow-hidden">
+                {/* Layer 1: Graph Canvas */}
+                <div className="absolute inset-0" style={{ zIndex: 1 }}>
+                    <ForceGraph2D
+                        ref={fgRefDetail}
+                        graphData={detailGraphData}
+                        nodeCanvasObject={renderNodeDetail}
+                        nodeCanvasObjectMode={() => 'replace'}
+                        linkColor={() => 'rgba(59, 130, 246, 0.15)'}
+                        linkWidth={1.5}
+                        backgroundColor="transparent"
+                        onEngineStop={() => {
+                            if (fgRefDetail.current) fgRefDetail.current.zoomToFit(400, 80);
+                        }}
+                    />
+                </div>
 
-                        <div className="space-y-4">
-                            <div>
-                                <div className="flex justify-between items-end mb-1.5">
-                                    <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Model Confidence</span>
-                                    <span className={`text-xs font-black font-mono ${conf > 0.8 ? 'text-green-400' : 'text-amber-400'}`}>{(conf * 100).toFixed(1)}%</span>
+                {/* Layer 2: Overlay UI (completely separate stacking context) */}
+                <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 50 }}>
+                    <div className="absolute top-2 left-2 flex flex-col gap-2">
+                        <button onClick={() => setSelectedGraphIdx(null)}
+                                className="pointer-events-auto px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-wider bg-slate-900/95 text-slate-300 hover:bg-slate-800 transition-all border border-slate-700/50 uppercase shadow-xl cursor-pointer">
+                            ← Exit
+                        </button>
+                        
+                        <div className="bg-slate-900/95 border border-slate-700/40 px-3 py-2.5 rounded-xl min-w-[200px] pointer-events-auto shadow-xl">
+                            <div className="flex justify-between items-center mb-2">
+                                <div>
+                                    <h2 className="text-sm font-bold text-white leading-tight">{GRAPH_LABELS[g.groundTruth]}</h2>
+                                    <p className="text-[8px] text-slate-500 font-mono">#{selectedGraphIdx} | {g.nodes.length}n/{g.links.length}e</p>
                                 </div>
-                                <div className="h-2 w-full bg-slate-800/50 rounded-full overflow-hidden border border-white/5">
-                                    <div className={`h-full transition-all duration-700 ${isCorrect ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${conf * 100}%` }} />
+                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold ${isCorrect ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
+                                    {isCorrect ? '✓' : '✗'}
                                 </div>
                             </div>
 
-                            <div className="pt-2">
-                                <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest block mb-3 border-l-2 border-amber-500 pl-2">
-                                    Readout Contributors
-                                </span>
-                                {(() => {
-                                    const contribs = contributions[selectedGraphIdx] || [];
-                                    const topNodes = contribs
-                                        .map((val, idx) => ({ id: idx, val }))
-                                        .sort((a, b) => b.val - a.val)
-                                        .slice(0, 3);
-                                    
-                                    return topNodes.map((node, i) => (
-                                        <div key={i} className="flex items-center justify-between mb-2 last:mb-0">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-slate-800/80 text-[10px] font-black text-slate-100 border border-white/5">
-                                                    {node.id}
+                            <div className="space-y-2">
+                                <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[8px] text-slate-500 uppercase font-bold">Confidence</span>
+                                        <span className={`text-[10px] font-bold font-mono ${conf > 0.8 ? 'text-green-400' : 'text-amber-400'}`}>{(conf * 100).toFixed(1)}%</span>
+                                    </div>
+                                    <div className="h-1.5 w-full bg-slate-800/50 rounded-full overflow-hidden">
+                                        <div className={`h-full transition-all duration-500 ${isCorrect ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${conf * 100}%` }} />
+                                    </div>
+                                </div>
+
+                                <div className="pt-1">
+                                    <span className="text-[8px] text-slate-500 uppercase font-bold block mb-1.5 border-l-2 border-amber-500 pl-1.5">
+                                        Top Contributors
+                                    </span>
+                                    {(() => {
+                                        const contribs = contributions[selectedGraphIdx] || [];
+                                        const topNodes = contribs
+                                            .map((val, idx) => ({ id: idx, val }))
+                                            .sort((a, b) => b.val - a.val)
+                                            .slice(0, 3);
+                                        
+                                        if (topNodes.length === 0) {
+                                            return <div className="text-[8px] text-slate-600 italic">No data yet</div>;
+                                        }
+                                        
+                                        return topNodes.map((node, i) => (
+                                            <div key={i} className="flex items-center justify-between mb-1 last:mb-0">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-5 h-5 rounded flex items-center justify-center bg-slate-800/80 text-[9px] font-bold text-slate-100">
+                                                        {node.id}
+                                                    </div>
+                                                    <div className="h-1 w-16 bg-slate-800/50 rounded-full overflow-hidden">
+                                                        <div className="h-full bg-amber-500" style={{ width: `${node.val * 100}%` }} />
+                                                    </div>
                                                 </div>
-                                                <div className="h-1.5 w-20 bg-slate-800/50 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-amber-500 shadow-[0_0_10px_#f59e0b]" style={{ width: `${node.val * 100}%` }} />
-                                                </div>
+                                                <span className="text-[9px] font-bold font-mono text-amber-500">{(node.val * 100).toFixed(0)}%</span>
                                             </div>
-                                            <span className="text-[10px] font-black font-mono text-amber-500">{(node.val * 100).toFixed(0)}%</span>
-                                        </div>
-                                    ));
-                                })()}
+                                        ));
+                                    })()}
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                <ForceGraph2D
-                    ref={fgRefDetail}
-                    graphData={detailGraphData}
-                    nodeCanvasObject={renderNodeDetail}
-                    nodeCanvasObjectMode={() => 'replace'}
-                    linkColor={() => 'rgba(59, 130, 246, 0.15)'}
-                    linkWidth={1.5}
-                    backgroundColor="transparent"
-                    onEngineStop={() => {
-                        if (fgRefDetail.current) fgRefDetail.current.zoomToFit(400, 80);
-                    }}
-                />
             </div>
         )
     }
 
     return (
-        <div className="w-full h-full overflow-y-auto p-8 bg-slate-950 custom-scrollbar">
+        <div key="grid_view" className="w-full h-full overflow-y-auto p-8 bg-slate-950 custom-scrollbar">
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-8 max-w-[1600px] mx-auto">
                 {graphs.slice(0, 50).map((g, i) => {
                     const pred = predictions[i]
@@ -272,7 +285,7 @@ export default function TaskTopology2() {
                                     <p className="text-[8px] text-slate-500 font-bold font-mono">GRAPH #{i}</p>
                                 </div>
                                 <div className="text-right">
-                                    <span className="text-[9px] text-slate-500 font-black px-2 py-0.5 rounded-full bg-white/5 uppercase">N:{g.numNodes}</span>
+                                    <span className="text-[9px] text-slate-500 font-black px-2 py-0.5 rounded-full bg-white/5 uppercase">N:{g.nodes.length}</span>
                                 </div>
                             </div>
                         </div>

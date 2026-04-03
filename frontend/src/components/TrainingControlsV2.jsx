@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import useGNNStore from '../store/useGNNStore'
 import usePlayerStore from '../store/playerStore'
-import generateMockSnapshots, {
+import {
   generateTask1Mock,
   generateTask2Mock,
   generateTask3Mock,
@@ -10,7 +10,16 @@ import generateMockSnapshots, {
   generateTask6Mock,
 } from '../mock/generateMockSnapshots'
 
-export default function TrainingControls() {
+const TASK_NAMES = {
+  1: 'Phân loại nút',
+  2: 'Phân loại đồ thị',
+  3: 'Dự đoán liên kết',
+  4: 'Phát hiện cộng đồng',
+  5: 'Biểu diễn đồ thị',
+  6: 'Sinh đồ thị',
+}
+
+export default function TrainingControlsV2() {
   const isTraining = useGNNStore((s) => s.isTraining)
   const trainingProgress = useGNNStore((s) => s.trainingProgress)
   const mockMode = useGNNStore((s) => s.mockMode)
@@ -31,7 +40,7 @@ export default function TrainingControls() {
   const handleStart = useCallback(() => {
     resetForTraining()
     setReportOpen(false)
-    
+
     if (mockMode) {
       setTraining(true, 0)
       setTimeout(() => {
@@ -80,91 +89,67 @@ export default function TrainingControls() {
             loadSnapshots(result.snapshots)
         }
         setDone(result.snapshots.length - 1)
-      }, 300)
+      }, 280)
     } else {
-      // Live mode: connect WebSocket and start real training
-      const { connect } = useGNNStore.getState()._wsRef?.current
-        ? { connect: null }
-        : { connect: null }  // ws is managed in useWebSocket hook
-      // Signal to App that training should start via websocket
-      // The config is broadcast via a custom event picked up by TrainingConnector
-      const config = {
-        task: selectedTask,
-        model: useGNNStore.getState().selectedModel,
-        dataset: hyperparams.dataset || 'cora',
-        epochs: hyperparams.epochs,
-        lr: hyperparams.lr,
-        hidden: hyperparams.hidden,
-        dropout: hyperparams.dropout,
-        heads: hyperparams.heads,
-        aggregator: hyperparams.aggregator,
-      }
-      window.dispatchEvent(new CustomEvent('gnn:start-training', { detail: config }))
+      window.dispatchEvent(new CustomEvent('gnn:start-training', {
+        detail: {
+          task: selectedTask,
+          model: useGNNStore.getState().selectedModel,
+          dataset: hyperparams.dataset || 'cora',
+          epochs: hyperparams.epochs,
+          lr: hyperparams.lr,
+          hidden: hyperparams.hidden,
+          dropout: hyperparams.dropout,
+          heads: hyperparams.heads,
+          aggregator: hyperparams.aggregator,
+        },
+      }))
       setTraining(true, 0)
     }
-  }, [mockMode, hyperparams, selectedTask, setTraining, setGraphData, setGroundTruth, setTrainMask, setTaskData, loadSnapshots, resetForTraining, setReportOpen])
+  }, [mockMode, hyperparams, selectedTask, setTraining, setGraphData, setGroundTruth, setTrainMask, setTaskData, loadSnapshots, setDone, resetForTraining, setReportOpen])
 
   const handleStop = useCallback(() => {
     setTraining(false, trainingProgress)
   }, [setTraining, trainingProgress])
 
-  const taskNames = {
-    1: 'Node Classification',
-    2: 'Graph Classification',
-    3: 'Link Prediction',
-    4: 'Community Detection',
-    5: 'Graph Embedding',
-    6: 'Graph Generation',
-  }
-
   return (
-    <div className="bg-slate-900/80 border-t border-slate-700/50 px-4 py-2">
+    <div className="border-t border-slate-800/70 bg-slate-950/92 px-4 py-3 backdrop-blur-md">
       <div className="flex items-center gap-3">
-        {!isTraining ? (
-          <button
-            onClick={handleStart}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold
-                       bg-gradient-to-r from-emerald-500 to-green-600 text-white
-                       hover:from-emerald-400 hover:to-green-500 transition-all
-                       shadow-lg shadow-green-500/20 hover:shadow-green-500/30
-                       active:scale-95"
-          >
-            ▶ Train {taskNames[selectedTask]}
-          </button>
-        ) : (
-          <button
-            onClick={handleStop}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold
-                       bg-red-500/80 text-white hover:bg-red-500 transition-all active:scale-95"
-          >
-            ■ Stop
-          </button>
-        )}
+        <button
+          onClick={isTraining ? handleStop : handleStart}
+          className={`rounded-2xl px-4 py-2 text-sm font-semibold transition-all ${
+            isTraining
+              ? 'bg-red-500 text-white hover:bg-red-400'
+              : 'bg-cyan-400 text-slate-950 hover:bg-cyan-300'
+          }`}
+        >
+          {isTraining ? 'Dừng huấn luyện' : `Huấn luyện ${TASK_NAMES[selectedTask]}`}
+        </button>
 
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span>Epochs: <span className="text-slate-200 font-medium">{hyperparams.epochs}</span></span>
-          <span>LR: <span className="text-slate-200 font-medium">{hyperparams.lr}</span></span>
-          <span>Hidden: <span className="text-slate-200 font-medium">{hyperparams.hidden}</span></span>
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-700/50 bg-slate-900/65 px-3 py-2 text-xs text-slate-300">
+          <span>Epoch: <span className="font-mono text-slate-100">{hyperparams.epochs}</span></span>
+          <span>LR: <span className="font-mono text-slate-100">{hyperparams.lr}</span></span>
+          <span>Ẩn: <span className="font-mono text-slate-100">{hyperparams.hidden}</span></span>
         </div>
 
         {isTraining && (
-          <div className="flex-1 flex items-center gap-2">
-            <div className="flex-1 bg-slate-700 rounded-full h-1.5">
+          <div className="flex flex-1 items-center gap-3">
+            <div className="h-2 flex-1 rounded-full bg-slate-800">
               <div
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-300"
+                className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500"
                 style={{ width: `${trainingProgress * 100}%` }}
               />
             </div>
-            <span className="text-xs text-slate-400 whitespace-nowrap">
-              {mockMode ? 'Generating...' : `${Math.round(trainingProgress * 100)}%`}
+            <span className="text-xs text-slate-400">
+              {mockMode ? 'Đang dựng dữ liệu mô phỏng...' : `${Math.round(trainingProgress * 100)}%`}
             </span>
           </div>
         )}
 
         {!isTraining && playerSnapshots.length > 0 && (
-          <span className="text-xs text-green-400 font-medium">
-            ✓ {playerSnapshots.length} epochs ready
-          </span>
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+            Sẵn sàng phát lại {playerSnapshots.length} epoch
+          </div>
         )}
       </div>
     </div>

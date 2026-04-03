@@ -593,13 +593,33 @@ export function generateTask6Mock(numEpochs = 60) {
         for (let j = i + 1; j < n; j++)
           if (seededRand(epoch * 6000 + g * 1000 + i * 100 + j) < edgeProb)
             links.push({ source: i, target: j })
-      return { id: g, nodes, links, valid: links.length >= n - 1, score: quality }
+      const density = links.length / Math.max(1, (n * (n - 1)) / 2)
+      const avgDegree = (links.length * 2) / Math.max(1, n)
+      const valid = links.length >= n - 1
+      const isolatedRatio = Math.max(0, (n - Math.min(n, links.length * 2)) / n)
+      return {
+        id: g,
+        nodes,
+        links,
+        valid,
+        score: quality,
+        density,
+        avg_degree: avgDegree,
+        isolated_ratio: isolatedRatio,
+      }
     })
 
     const latentPoints = Array.from({ length: 30 }, (_, i) => [
       (seededRand(i * 311 + epoch * 7) - 0.5) * 2 * (1 + (1 - progress) * 2),
       (seededRand(i * 419 + epoch * 11) - 0.5) * 2 * (1 + (1 - progress) * 2),
     ])
+    const latentPointScores = latentPoints.map(([x, y]) => {
+      const radial = Math.sqrt(x * x + y * y)
+      return Math.max(0, Math.min(1, 1 - radial / 4))
+    })
+    const latentPointValidity = latentPointScores.map((score, i) =>
+      score > 0.45 || seededRand(epoch * 97 + i * 17) > 0.55 ? 1 : 0
+    )
 
     const lossNoise = (seededRand(epoch * 53) - 0.5) * 0.015
     const reconLoss = Math.max(0.05, 2.0 * Math.exp(-epoch / 15) + 0.1 + lossNoise)
@@ -613,6 +633,8 @@ export function generateTask6Mock(numEpochs = 60) {
 
     snapshots.push({
       epoch, generated_graphs: generatedGraphs, latent_points: latentPoints,
+      latent_point_scores: latentPointScores,
+      latent_point_validity: latentPointValidity,
       train_loss: reconLoss + klLoss, val_loss: (reconLoss + klLoss) * 1.1,
       train_acc: Math.min(1, quality), val_acc: Math.min(1, quality * 0.9),
       recon_loss: reconLoss, kl_loss: klLoss,

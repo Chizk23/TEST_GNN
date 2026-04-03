@@ -23,8 +23,10 @@ export default function TopologyView() {
   const totalEpochs = usePlayerStore(s => s.totalEpochs)
 
   const [dimensions, setDimensions] = useState({ width: 800, height: 400 })
+  const [stableGraphData, setStableGraphData] = useState(null)
   const containerRef = useRef()
   const fgRef = useRef()
+  const fitPendingRef = useRef(false)
 
   // 3. StateRef: Đảm bảo luồng vẽ Canvas luôn lấy được dữ liệu mới nhất mà không trễ nhịp
   const animState = useRef({
@@ -77,21 +79,32 @@ export default function TopologyView() {
     }
   }, [rawGraphData])
 
+  useEffect(() => {
+    if (graphData?.nodes?.length) {
+      setStableGraphData(graphData)
+      fitPendingRef.current = true
+    }
+  }, [graphData])
+
+  const activeGraphData = stableGraphData || graphData
+
   // Simulation Setup
   useEffect(() => {
-    if (!fgRef.current || !graphData) return
+    if (!fgRef.current || !activeGraphData) return
     const fg = fgRef.current
     fg.d3Force('charge')?.strength(-120).distanceMax(300)
     fg.d3Force('link')?.distance(35)
     fg.d3Force('center')?.strength(0.05)
     fg.d3ReheatSimulation()
-  }, [graphData])
+  }, [activeGraphData])
 
   // 4. HÀM VẼ CANVAS: Luôn dùng animState.current.cef để nội suy màu sắc
   const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
     const { snaps, cef, vm, gt, sid } = animState.current
     let nodeColor = '#475569'
     let maxAttn = 0
+
+    if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return
 
     if (snaps && snaps.length > 0) {
       const epochInt = Math.max(0, Math.min(snaps.length - 1, Math.floor(cef)))
@@ -115,12 +128,12 @@ export default function TopologyView() {
     })
   }, [selectedModel, totalEpochs])
 
-  if (!graphData) {
+  if (!activeGraphData) {
     return (
       <div className="w-full h-full flex items-center justify-center text-slate-700 bg-slate-950">
         <div className="text-center animate-pulse">
           <div className="text-4xl mb-4">🕸️</div>
-          <p className="text-[10px] font-mono tracking-widest uppercase italic">Neural Network Core...</p>
+          <p className="text-[10px] font-mono tracking-widest uppercase italic">Dang chuan bi do thi...</p>
         </div>
       </div>
     )
@@ -130,7 +143,7 @@ export default function TopologyView() {
     <div ref={containerRef} className="w-full h-full relative bg-slate-950 overflow-hidden">
       <ForceGraph2D
         ref={fgRef}
-        graphData={graphData}
+        graphData={activeGraphData}
         width={dimensions.width}
         height={dimensions.height}
         nodeCanvasObject={nodeCanvasObject}
@@ -182,6 +195,17 @@ export default function TopologyView() {
         }}
         linkDirectionalParticleColor={(link) => animState.current.model === 'SAGE' ? '#8b5cf6' : 'rgba(34, 211, 238, 0.8)'}
         onNodeClick={(node) => setSelectedNode(node.id)}
+        onEngineStop={() => {
+          if (fitPendingRef.current && fgRef.current) {
+            fitPendingRef.current = false
+            try {
+              fgRef.current.zoomToFit(420, 72)
+            } catch {
+              // Ignore transient fit errors while the layout is settling.
+            }
+          }
+        }}
+        warmupTicks={30}
         cooldownTicks={100}
         backgroundColor="transparent"
         enableNodeDrag={true}

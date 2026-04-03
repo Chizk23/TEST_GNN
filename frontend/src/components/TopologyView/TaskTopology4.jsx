@@ -186,39 +186,31 @@ export default function TaskTopology4() {
         backgroundColor="transparent"
       />
 
-      {/* Q HUD */}
-      <div className="absolute top-6 left-6 z-10">
-        <div className="bg-slate-900/60 backdrop-blur-xl rounded-[2rem] p-6 border border-white/5 shadow-2xl min-w-[210px]">
-          <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest block mb-1">Detection Quality</span>
-          <div className="flex items-baseline gap-2">
-            <span className={`text-4xl font-black font-mono tracking-tighter ${modularityQ > 0.4 ? 'text-green-400' : 'text-amber-400'}`}>
-                {modularityQ.toFixed(3)}
-            </span>
-            <span className="text-xs text-slate-600 font-bold uppercase">Q-Score</span>
-          </div>
-          <div className="w-full bg-slate-800/50 h-2 mt-4 rounded-full overflow-hidden border border-white/5">
-            <div className="h-full bg-gradient-to-r from-amber-500 to-green-500 transition-all duration-700 shadow-[0_0_10px_rgba(34,197,94,0.3)]" 
+      {/* Q HUD — compact bottom-right */}
+      <div className="absolute top-12 left-2 z-10">
+        <div className="bg-slate-900/80 backdrop-blur-md rounded-lg px-3 py-2 border border-slate-700/40 flex items-center gap-2">
+          <span className="text-[8px] text-slate-500 uppercase font-bold tracking-wider">Q</span>
+          <span className={`text-base font-black font-mono leading-none ${modularityQ > 0.4 ? 'text-green-400' : 'text-amber-400'}`}>
+              {modularityQ.toFixed(3)}
+          </span>
+          <div className="w-14 bg-slate-800/50 h-1.5 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-amber-500 to-green-500 transition-all duration-500" 
                  style={{ width: `${modularityQ * 100}%` }} />
           </div>
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="absolute bottom-6 left-6 bg-slate-900/40 backdrop-blur-md rounded-2xl p-4 border border-white/5 z-10">
-        <div className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-3">Community Structure</div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          {COMMUNITY_COLORS.slice(0, 6).map((c, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full shadow-[0_0_8px] shadow-current transition-all" style={{ backgroundColor: c, color: c }} />
-              <span className="text-[10px] text-slate-300 font-black font-mono uppercase tracking-tighter">Island_{i}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 pt-3 border-t border-white/5 space-y-2">
-            <div className="flex items-center gap-3">
-                <div className="w-4 h-4 rounded-full border border-white bg-white/10 animate-pulse" />
-                <span className="text-[10px] text-slate-200 font-black uppercase italic tracking-tight">Bridge Gateway</span>
-            </div>
+      {/* Legend — compact horizontal strip */}
+      <div className="absolute bottom-2 left-2 right-2 bg-slate-900/80 backdrop-blur-md rounded-lg px-3 py-1.5 border border-slate-700/40 z-10 flex items-center gap-3 flex-wrap">
+        {COMMUNITY_COLORS.slice(0, 6).map((c, i) => (
+          <div key={i} className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />
+            <span className="text-[8px] text-slate-400 font-mono">C{i}</span>
+          </div>
+        ))}
+        <div className="flex items-center gap-1 ml-1 pl-2 border-l border-slate-700/50">
+          <div className="w-2.5 h-2.5 rounded-full border border-white/60 bg-white/10" />
+          <span className="text-[8px] text-slate-400 font-bold">Bridge</span>
         </div>
       </div>
     </div>

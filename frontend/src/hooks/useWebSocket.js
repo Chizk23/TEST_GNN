@@ -53,7 +53,10 @@ export default function useWebSocket() {
         setTraining(true, msg.progress)
 
       } else if (msg.type === 'training_complete') {
-        loadSnapshots(msg.all_snapshots)
+        const currentSnapshots = usePlayerStore.getState().snapshots
+        if (currentSnapshots.length !== msg.all_snapshots.length) {
+          loadSnapshots(msg.all_snapshots)
+        }
         setTraining(false, 1)
         setDone(msg.all_snapshots.length - 1)
 
