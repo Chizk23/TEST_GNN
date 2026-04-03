@@ -113,6 +113,13 @@ export default function TaskTopology6() {
 
   const validCount = generatedGraphs.filter(g => g.valid).length
   const avgNodes = (generatedGraphs.reduce((sum, g) => sum + g.nodes.length, 0) / generatedGraphs.length).toFixed(1)
+  const history = snapshots.slice(Math.max(0, epochInt - 19), epochInt + 1)
+  const qualityTrend = history.map((entry) => {
+    const validity = entry.validity_rate ?? 0
+    const novelty = entry.novelty_rate ?? 0
+    const uniqueness = entry.uniqueness_rate ?? 0
+    return (validity * 0.45 + uniqueness * 0.25 + novelty * 0.3) * 100
+  })
 
   return (
     <div className="w-full h-full overflow-y-auto p-6 bg-slate-950 custom-scrollbar">
@@ -164,12 +171,22 @@ export default function TaskTopology6() {
               <div>
                 <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-1">Latent DNA</p>
                 <div className="flex gap-0.5">
-                  {[...Array(6)].map((_, j) => (
-                    <div key={j} className="w-1 h-3 rounded-full bg-slate-800"
-                         style={{ 
-                           height: `${Math.random() * 10 + 2}px`,
-                           backgroundColor: g.valid ? '#22c55e44' : '#ef444444' 
-                         }} />
+                  {[
+                    g.nodes.length / 12,
+                    g.links.length / Math.max(1, g.nodes.length * 2),
+                    g.density ?? 0,
+                    (g.avg_degree ?? 0) / 4,
+                    1 - (g.isolated_ratio ?? 0),
+                    g.score ?? 0,
+                  ].map((metric, j) => (
+                    <div
+                      key={j}
+                      className="w-1 rounded-full bg-slate-800"
+                      style={{
+                        height: `${Math.max(2, Math.min(14, metric * 14))}px`,
+                        backgroundColor: g.valid ? '#22c55e66' : '#ef444466',
+                      }}
+                    />
                   ))}
                 </div>
               </div>
@@ -195,12 +212,14 @@ export default function TaskTopology6() {
              </div>
           </div>
           <div className="h-24 bg-slate-900/40 rounded-3xl border border-white/5 relative overflow-hidden flex items-end px-4 gap-1">
-             {[...Array(40)].map((_, i) => {
-                const height = Math.abs(Math.sin((epochInt + i) * 0.2)) * 60 + 10;
-                const isCurrent = i === 20;
+             {qualityTrend.map((height, i) => {
+                const isCurrent = i === qualityTrend.length - 1
                 return (
-                  <div key={i} className={`flex-1 rounded-t-full transition-all duration-500 ${isCurrent ? 'bg-indigo-500 shadow-[0_0_15px_#6366f1]' : 'bg-slate-800/40'}`}
-                       style={{ height: `${height}%` }} />
+                  <div
+                    key={i}
+                    className={`flex-1 rounded-t-full transition-all duration-500 ${isCurrent ? 'bg-indigo-500 shadow-[0_0_15px_#6366f1]' : 'bg-slate-800/40'}`}
+                    style={{ height: `${Math.max(10, height)}%` }}
+                  />
                 )
              })}
              <div className="absolute inset-x-0 top-1/2 h-px bg-white/5" />

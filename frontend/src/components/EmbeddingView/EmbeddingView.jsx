@@ -5,6 +5,45 @@ import usePlayerStore from '../../store/playerStore'
 import { CLASS_COLORS } from '../../utils/colors'
 import { easeInOutCubic, interpolateSnapshots } from '../../engine/interpolate'
 
+function computeAxisRange(values, paddingRatio = 0.18, minSpan = 6) {
+  if (!values?.length) return [-minSpan / 2, minSpan / 2]
+
+  let min = Infinity
+  let max = -Infinity
+  values.forEach((value) => {
+    if (Number.isFinite(value)) {
+      min = Math.min(min, value)
+      max = Math.max(max, value)
+    }
+  })
+
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return [-minSpan / 2, minSpan / 2]
+  }
+
+  const rawSpan = Math.max(max - min, 0)
+  const span = Math.max(rawSpan, minSpan)
+  const center = (min + max) / 2
+  const half = (span * (1 + paddingRatio)) / 2
+  return [center - half, center + half]
+}
+
+function getSpreadStats(points = []) {
+  if (!points.length) {
+    return { xRange: [-3, 3], yRange: [-3, 3], compactness: 1 }
+  }
+
+  const xValues = points.map((point) => point[0])
+  const yValues = points.map((point) => point[1])
+  const xRange = computeAxisRange(xValues)
+  const yRange = computeAxisRange(yValues)
+  const xSpan = Math.abs(xRange[1] - xRange[0])
+  const ySpan = Math.abs(yRange[1] - yRange[0])
+  const compactness = Math.max(0.55, Math.min(1.7, 8 / Math.max(xSpan, ySpan, 0.001)))
+
+  return { xRange, yRange, compactness }
+}
+
 /* ─── Mini-Graph Popup for Task 2 ─────────────────────────────────────────── */
 function MiniGraphPopup({ graph, position }) {
   if (!graph || !position) return null
@@ -112,10 +151,11 @@ export default function EmbeddingView() {
     if (selectedTask === 2 && currSnap.graph_embeddings_2d) {
       const emb = currSnap.graph_embeddings_2d
       const preds = currSnap.graph_predictions || []
+      const { compactness } = getSpreadStats(emb)
       const x = emb.map(p => p[0])
       const y = emb.map(p => p[1])
       const colors = preds.map(c => CLASS_COLORS[c] || '#94a3b8')
-      const sizes = emb.map((_, i) => (i === hoveredGraphId) ? 14 : 8)
+      const sizes = emb.map((_, i) => (i === hoveredGraphId) ? 16 * compactness : 9 * compactness)
       const opacities = emb.map((_, i) => (i === hoveredGraphId) ? 1.0 : 0.75)
       
       return [{
@@ -142,6 +182,7 @@ export default function EmbeddingView() {
     if (selectedTask === 3 && currSnap.embeddings_2d && testEdges) {
       const emb = currSnap.embeddings_2d
       const scores = currSnap.edge_scores || []
+      const { compactness } = getSpreadStats(emb)
       
       const x = [], y = [], colors = [], texts = [], sizes = [], opacities = []
 
@@ -153,7 +194,7 @@ export default function EmbeddingView() {
              x.push((p1[0] + p2[0]) / 2)
              y.push((p1[1] + p2[1]) / 2)
              colors.push(e.exists ? '#3b82f6' : '#ef4444')
-             sizes.push(8 + score * 8)
+             sizes.push((8 + score * 8) * Math.min(compactness, 1.45))
              opacities.push(0.6 + score * 0.4)
              texts.push(`Pair: ${e.source}-${e.target}<br>GT: ${e.exists ? 'Link' : 'No Link'}<br>Confidence: ${(score*100).toFixed(1)}%`)
          }
@@ -191,10 +232,11 @@ export default function EmbeddingView() {
     if (!currSnap?.embeddings_2d) return null
     const emb = currSnap.embeddings_2d
     const preds = currSnap.node_predictions || []
+    const { compactness } = getSpreadStats(emb)
     const x = emb.map((p) => p[0])
     const y = emb.map((p) => p[1])
     const colors = preds.map((c) => CLASS_COLORS[c] || '#94a3b8')
-    const sizes = emb.map((_, i) => i === selectedNodeId ? 12 : 6)
+    const sizes = emb.map((_, i) => i === selectedNodeId ? 13 * compactness : 7 * compactness)
     const opacities = emb.map((_, i) => i === selectedNodeId ? 1.0 : 0.82)
 
     const traces = [{
@@ -324,6 +366,12 @@ export default function EmbeddingView() {
                               'text-red-400'
 
   const collapseWarning = plotData._collapseWarning
+  const axisConfig = useMemo(() => {
+    if (selectedTask === 2) {
+      return getSpreadStats(currSnap?.graph_embeddings_2d || [])
+    }
+    return getSpreadStats(currSnap?.embeddings_2d || [])
+  }, [currSnap, selectedTask])
 
   return (
     <div ref={plotContainerRef} className="w-full h-full relative">
@@ -335,15 +383,19 @@ export default function EmbeddingView() {
           font: { color: '#94a3b8', size: 10 },
           xaxis: {
             showgrid: false, zeroline: false, showticklabels: false,
-            autorange: true,
+            range: axisConfig.xRange,
+            fixedrange: false,
           },
           yaxis: {
             showgrid: false, zeroline: false, showticklabels: false,
-            autorange: true,
+            range: axisConfig.yRange,
+            fixedrange: false,
+            scaleanchor: 'x',
+            scaleratio: 1,
           },
-          margin: { l: 8, r: 8, t: 8, b: 8 },
+          margin: { l: 12, r: 12, t: 54, b: 28 },
           transition: { duration: 60, easing: 'linear', ordering: 'traces first' },
-          uirevision: 'gnn-embed-constant',
+          uirevision: `gnn-embed-${selectedTask}`,
           showlegend: false,
           dragmode: 'pan',
         }}
@@ -378,6 +430,13 @@ export default function EmbeddingView() {
           </button>
         </div>
       )}
+
+      <div className="absolute bottom-2 left-2 bg-slate-950/75 border border-slate-700/50 rounded-lg px-2 py-1 pointer-events-none">
+        <span className="text-[9px] text-slate-500">Độ mở cụm </span>
+        <span className="text-[9px] font-semibold text-cyan-300">
+          {(axisConfig.compactness * 100).toFixed(0)}%
+        </span>
+      </div>
 
       {/* Collapse Warning (Task 3) */}
       {collapseWarning && (

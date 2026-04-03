@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import random
 from sklearn.decomposition import PCA
 from sklearn.metrics import roc_auc_score
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import GCNConv, GATConv, SAGEConv
 from torch_geometric.utils import negative_sampling, to_undirected
 
 
@@ -18,14 +18,24 @@ from torch_geometric.utils import negative_sampling, to_undirected
 # Link Prediction Model (GCN Encoder + Dot-Product Decoder)
 # ───────────────────────────────────────────────────────────────────────────────
 class LinkPredModel(torch.nn.Module):
-    def __init__(self, in_channels, hidden=64):
+    def __init__(self, in_channels, hidden=64, model_type='GCN', heads=4, dropout=0.5):
         super().__init__()
-        self.conv1 = GCNConv(in_channels, hidden)
-        self.conv2 = GCNConv(hidden, hidden)
+        self.model_type = model_type
+        self.dropout = dropout
+        if model_type == 'GAT':
+            self.conv1 = GATConv(in_channels, hidden, heads=heads, dropout=dropout)
+            self.conv2 = GATConv(hidden * heads, hidden, heads=1, concat=False, dropout=dropout)
+        elif model_type == 'SAGE':
+            self.conv1 = SAGEConv(in_channels, hidden)
+            self.conv2 = SAGEConv(hidden, hidden)
+        else:
+            self.conv1 = GCNConv(in_channels, hidden)
+            self.conv2 = GCNConv(hidden, hidden)
 
     def encode(self, x, edge_index):
-        x = self.conv1(x, edge_index).relu()
-        x = F.dropout(x, p=0.5, training=self.training)
+        x = self.conv1(x, edge_index)
+        x = F.elu(x) if self.model_type == 'GAT' else x.relu()
+        x = F.dropout(x, p=self.dropout, training=self.training)
         z = self.conv2(x, edge_index)
         return z
 
@@ -126,7 +136,13 @@ async def run_link_prediction(config, data, model_type, websocket, stop_flag):
     })
 
     # Build model
-    model = LinkPredModel(in_channels=num_features, hidden=64)
+    model = LinkPredModel(
+        in_channels=num_features,
+        hidden=config.get('hidden', 64),
+        model_type=model_type,
+        heads=config.get('heads', 4),
+        dropout=config.get('dropout', 0.5),
+    )
     optimizer = torch.optim.Adam(model.parameters(), lr=config.get('lr', 0.01))
 
     epoch_snapshots = []

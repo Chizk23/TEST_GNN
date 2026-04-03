@@ -180,6 +180,11 @@ export default function EmbeddingSpaceB() {
     if (dataReady) drawCanvas()
   }, [dataReady, drawCanvas])
 
+  const currentSnapshot = snapshotsRef.current[epochRef.current]
+  const knnPreservation = currentSnapshot?.knn_preservation ?? 0
+  const linkReconAuc = currentSnapshot?.link_recon_auc ?? 0
+  const activeProjection = projMode === 'tsne' ? 't-SNE' : 'PCA'
+
   if ((!dataReady && !graphDataRef.current) || snapshotsRef.current.length === 0) {
     return (
       <div className="w-full h-full flex items-center justify-center text-slate-500 text-xs">
@@ -216,6 +221,17 @@ export default function EmbeddingSpaceB() {
         >
           〰️ Trail
         </button>
+      </div>
+
+      <div className="absolute top-2 left-2 z-10 flex gap-2">
+        <div className="bg-slate-900/85 border border-slate-700/40 rounded-lg px-2 py-1.5">
+          <div className="text-[8px] uppercase tracking-wider text-slate-500">{activeProjection}</div>
+          <div className="text-[11px] font-mono font-bold text-cyan-300">{(knnPreservation * 100).toFixed(0)}% kNN</div>
+        </div>
+        <div className="bg-slate-900/85 border border-slate-700/40 rounded-lg px-2 py-1.5">
+          <div className="text-[8px] uppercase tracking-wider text-slate-500">Recon</div>
+          <div className="text-[11px] font-mono font-bold text-orange-300">{linkReconAuc.toFixed(3)} AUC</div>
+        </div>
       </div>
 
       {/* Legend */}

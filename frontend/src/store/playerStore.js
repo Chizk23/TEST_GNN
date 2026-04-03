@@ -10,6 +10,7 @@ const usePlayerStore = create((set, get) => ({
   totalEpochs: 0,
   trainingDone: false,
   bestEpoch: 0,
+  reportVersion: 0,
 
   loadSnapshots: (snapshots) => {
     set({
@@ -17,8 +18,23 @@ const usePlayerStore = create((set, get) => ({
       totalEpochs: snapshots.length,
       currentEpoch: 0,
       currentEpochFloat: 0,
-      trainingDone: true,
+      trainingDone: snapshots.length > 0,
       isPlaying: false
+    })
+  },
+
+  resetForTraining: () => {
+    const { rafId } = get()
+    if (rafId) cancelAnimationFrame(rafId)
+    set({
+      snapshots: [],
+      currentEpoch: 0,
+      currentEpochFloat: 0,
+      isPlaying: false,
+      rafId: null,
+      totalEpochs: 0,
+      trainingDone: false,
+      bestEpoch: 0,
     })
   },
 
@@ -32,7 +48,7 @@ const usePlayerStore = create((set, get) => ({
   },
 
   setDone: (bestEpoch) => {
-    set({ trainingDone: true, bestEpoch })
+    set((s) => ({ trainingDone: true, bestEpoch, reportVersion: s.reportVersion + 1 }))
     const { snapshots } = get()
     // Go back to the beginning after training is finished, so user can press play
     if (snapshots.length > 0) {

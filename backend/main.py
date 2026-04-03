@@ -6,6 +6,7 @@ import sys
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from api.user_loader import router as user_loader_router
+from database import init_db
 
 try:
     import torch
@@ -20,6 +21,7 @@ try:
     from tasks.link_prediction import run_link_prediction
     from tasks.community_detection import run_community_detection
     from tasks.graph_embedding import run_graph_embedding
+    from tasks.graph_generation import run_graph_generation
 
     HAS_TORCH = True
 except ImportError as e:
@@ -27,6 +29,10 @@ except ImportError as e:
     print(f"Warning: ML modules not found ({e}). Running in API-only mode (No training/PyTorch).", file=sys.stderr)
 
 app = FastAPI(title="GNN-Insight Backend")
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 app.include_router(user_loader_router, prefix="/api")
 
@@ -176,6 +182,18 @@ async def train_websocket(websocket: WebSocket):
 
             epoch_snapshots = await run_graph_embedding(
                 config, data, model_type, websocket, stop_flag
+            )
+            await websocket.send_json({
+                'type': 'training_complete',
+                'all_snapshots': epoch_snapshots,
+            })
+            return
+
+        if task_id == 6:
+            dataset_name = config.get('dataset', 'cora')
+            data = load_dataset(dataset_name)
+            epoch_snapshots = await run_graph_generation(
+                config, data, websocket, stop_flag
             )
             await websocket.send_json({
                 'type': 'training_complete',

@@ -17,6 +17,8 @@ export default function LatentSpaceView() {
   const [interpT, setInterpT] = useState(0.5)
 
   const latentPoints = snap?.latent_points || []
+  const latentPointScores = snap?.latent_point_scores || []
+  const latentPointValidity = snap?.latent_point_validity || []
 
   // Responsive
   useEffect(() => {
@@ -68,11 +70,14 @@ export default function LatentSpaceView() {
     latentPoints.forEach((pt, i) => {
       const [cx, cy] = toCanvas(pt)
       const isSelected = selectedPts.includes(i)
+      const score = latentPointScores[i] ?? 0.5
+      const isValid = (latentPointValidity[i] ?? 0) >= 0.5
+      const radius = 3 + score * 4
 
       // Selection glow
       if (isSelected) {
         ctx.beginPath()
-        ctx.arc(cx, cy, 10, 0, 2 * Math.PI)
+        ctx.arc(cx, cy, 10 + score * 3, 0, 2 * Math.PI)
         ctx.fillStyle = 'rgba(99, 102, 241, 0.2)'
         ctx.fill()
         ctx.strokeStyle = '#6366f1'
@@ -81,8 +86,12 @@ export default function LatentSpaceView() {
       }
 
       ctx.beginPath()
-      ctx.arc(cx, cy, isSelected ? 5 : 3.5, 0, 2 * Math.PI)
-      ctx.fillStyle = isSelected ? '#a5b4fc' : '#64748b'
+      ctx.arc(cx, cy, isSelected ? radius + 1.5 : radius, 0, 2 * Math.PI)
+      ctx.fillStyle = isSelected
+        ? '#a5b4fc'
+        : isValid
+          ? `rgba(34, 197, 94, ${0.45 + score * 0.45})`
+          : `rgba(248, 113, 113, ${0.4 + score * 0.5})`
       ctx.fill()
     })
 
@@ -129,7 +138,7 @@ export default function LatentSpaceView() {
     ctx.textAlign = 'left'
     ctx.fillText(`Latent Space — Epoch ${epochInt}`, scaleInfo.pad, 14)
 
-  }, [latentPoints, dims, selectedPts, interpT, epochInt, scaleInfo, toCanvas])
+  }, [latentPoints, latentPointScores, latentPointValidity, dims, selectedPts, interpT, epochInt, scaleInfo, toCanvas])
 
   // Handle clicks for point selection
   const handleClick = useCallback((e) => {
@@ -167,6 +176,12 @@ export default function LatentSpaceView() {
     )
   }
 
+  const selectedMeta = selectedPts.map((idx) => ({
+    idx,
+    score: latentPointScores[idx] ?? 0,
+    valid: (latentPointValidity[idx] ?? 0) >= 0.5,
+  }))
+
   return (
     <div ref={containerRef} className="w-full h-full relative bg-slate-950 overflow-hidden">
       <canvas
@@ -175,6 +190,14 @@ export default function LatentSpaceView() {
         className="absolute inset-0"
         onClick={handleClick}
       />
+
+      <div className="absolute top-2 right-2 z-10 bg-slate-900/85 border border-slate-700/40 rounded-xl px-3 py-2 text-[9px] text-slate-300">
+        <div className="text-slate-500 uppercase tracking-wider mb-1">Latent Quality</div>
+        <div className="flex items-center gap-3">
+          <span className="text-green-400">Valid {(latentPointValidity.filter(v => v >= 0.5).length / Math.max(1, latentPoints.length) * 100).toFixed(0)}%</span>
+          <span className="text-orange-400">Mean {(latentPointScores.reduce((sum, v) => sum + v, 0) / Math.max(1, latentPointScores.length)).toFixed(2)}</span>
+        </div>
+      </div>
 
       {/* Interpolation slider */}
       {selectedPts.length === 2 && (
@@ -193,7 +216,11 @@ export default function LatentSpaceView() {
             <span className="text-[9px] text-blue-400 font-bold">B</span>
             <span className="text-[9px] text-orange-400 font-mono w-8">{interpT.toFixed(2)}</span>
           </div>
-          <p className="text-[7px] text-slate-600 mt-0.5">Drag to interpolate between latent points</p>
+          <p className="text-[7px] text-slate-600 mt-0.5">
+            Drag to interpolate between latent points.
+            A {selectedMeta[0]?.valid ? 'valid' : 'risky'} {selectedMeta[0]?.score.toFixed(2)}.
+            B {selectedMeta[1]?.valid ? 'valid' : 'risky'} {selectedMeta[1]?.score.toFixed(2)}.
+          </p>
         </div>
       )}
 

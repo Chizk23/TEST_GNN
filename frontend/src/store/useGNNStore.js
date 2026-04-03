@@ -30,6 +30,7 @@ const useGNNStore = create((set, get) => ({
   viewMode: 'prediction',
   attentionHead: 'avg',
   configOpen: false,
+  reportOpen: false,
 
   // ─── Actions: Config ─────────────────────────────────────────
   setTask: (task) => {
@@ -108,6 +109,7 @@ const useGNNStore = create((set, get) => ({
   setViewMode: (mode) => set({ viewMode: mode }),
   setAttentionHead: (head) => set({ attentionHead: head }),
   setConfigOpen: (open) => set({ configOpen: open }),
+  setReportOpen: (open) => set({ reportOpen: open }),
   setTraining: (isTraining, progress) => set({ isTraining, trainingProgress: progress ?? 0 }),
 }))
 
