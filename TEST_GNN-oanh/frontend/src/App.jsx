@@ -9,6 +9,7 @@ import TaskTopology4 from './components/TopologyView/TaskTopology4'
 import TaskTopology5 from './components/TopologyView/TaskTopology5'
 import TaskTopology6 from './components/TopologyView/TaskTopology6'
 import EmbeddingView from './components/EmbeddingView/EmbeddingView'
+import Task1MetricsPanel from './components/MetricsChart/Task1MetricsPanel'
 import MetricsChart from './components/MetricsChart/MetricsChart'
 import NodeInfoPanel from './components/TopologyView/NodeInfoPanelV2'
 import Player from './components/PlayerV2'
@@ -24,6 +25,7 @@ import ModularityMonitor from './components/TopologyView/ModularityMonitor'
 import DendrogramView from './components/TopologyView/DendrogramView'
 import EmbeddingSpaceB from './components/TopologyView/EmbeddingSpaceB'
 import StructurePreservation from './components/TopologyView/StructurePreservation'
+import Task5NodeInspector from './components/TopologyView/Task5NodeInspector'
 import LatentSpaceView from './components/TopologyView/LatentSpaceView'
 import ValidityMonitor from './components/TopologyView/ValidityMonitor'
 import PairProximityView from './components/TopologyView/PairProximityView'
@@ -31,6 +33,10 @@ import LinkMetricsPanel from './components/TopologyView/LinkMetricsPanel'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import DataInputView from './components/UploadPanel/DataInputView'
 import TrainingReport from './components/TrainingReport'
+import ProjectLibrary from './components/Library/ProjectLibrary'
+import FloatPanel from './components/FloatPanel'
+import Task2MetricsPanel from './components/MetricsChart/Task2MetricsPanel'
+import CommunityEvolution from './components/TopologyView/CommunityEvolution'
 
 // Route to task-specific topology component
 function TopologyRouter() {
@@ -50,7 +56,7 @@ function TopologyRouter() {
 function EmbeddingRouter() {
   const selectedTask = useGNNStore((s) => s.selectedTask)
   if (selectedTask === 3) return <PairProximityView />
-  if (selectedTask === 4) return <DendrogramView />
+  if (selectedTask === 4) return <CommunityEvolution />
   if (selectedTask === 5) return <EmbeddingSpaceB />
   if (selectedTask === 6) return <LatentSpaceView />
   return <EmbeddingView />
@@ -61,14 +67,11 @@ function InfoRouter() {
   const selectedTask = useGNNStore((s) => s.selectedTask)
   if (selectedTask === 1) return <NodeInfoPanel />
   if (selectedTask === 2) return <ReadoutMonitor />
-  if (selectedTask === 3) return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="flex-1 min-h-0"><ROCMonitor /></div>
-      <div className="border-t border-slate-800/50 flex-1 min-h-0"><LinkMetricsPanel /></div>
-    </div>
-  )
+  // Task 3 & 4: metrics are already in the bottom-right metrics panel
+  // Inspector drawer shows simpler supplementary info
+  if (selectedTask === 3) return <LinkMetricsPanel />
   if (selectedTask === 4) return <ModularityMonitor />
-  if (selectedTask === 5) return <StructurePreservation />
+  if (selectedTask === 5) return <Task5NodeInspector />
   if (selectedTask === 6) return <ValidityMonitor />
   return <NodeInfoPanel />
 }
@@ -78,7 +81,7 @@ function InspectorDrawer() {
   const selectedNodeId = useGNNStore((s) => s.selectedNodeId)
   const setSelectedNode = useGNNStore((s) => s.setSelectedNode)
 
-  if (selectedTask !== 1 || selectedNodeId === null) return null
+  if (![1, 5].includes(selectedTask) || selectedNodeId === null) return null
 
   return (
     <div className="absolute inset-y-4 right-4 z-30 w-[360px] max-w-[42%] rounded-[24px] border border-slate-700/50 bg-[#071120]/96 shadow-2xl backdrop-blur-md">
@@ -126,6 +129,7 @@ function App() {
   const lastReportVersionRef = useRef(0)
 
   const [isDataInputOpen, setIsDataInputOpen] = useState(false)
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false)
 
   // WebSocket for live backend training
   const { connect, disconnect } = useWebSocket()
@@ -214,9 +218,9 @@ function App() {
       inspector: 'Modularity, conductance và kích thước nhóm',
     },
     5: {
-      topology: 'Đồ thị gốc được tô theo độ gần latent',
-      embedding: 'Phép chiếu của embedding cấu trúc đã học',
-      metrics: 'Không gian latent giữ topology tốt đến đâu',
+      topology: 'Cấu trúc đồ thị tải lên — cạnh tô theo proximity',
+      embedding: 'Không gian embedding unsupervised (PCA / t-SNE)',
+      metrics: 'k-NN preservation, Link AUC và reconstruction loss',
       inspector: 'Giữ cấu trúc và chất lượng tái tạo',
     },
     6: {
@@ -275,6 +279,13 @@ function App() {
           <ExportToolbar />
 
           <button
+            onClick={() => setIsLibraryOpen(true)}
+            className="px-2 py-1 rounded text-[10px] font-medium transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg"
+          >
+            📚 Thư viện
+          </button>
+
+          <button
             onClick={() => setIsDataInputOpen(true)}
             className="px-2 py-1 rounded text-[10px] font-medium transition-all bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg"
           >
@@ -305,7 +316,8 @@ function App() {
       {/* Main Content */}
       <main className="flex-1 p-3 overflow-hidden">
         <div className="panel-surface relative h-full overflow-hidden p-3">
-          <div className="grid h-full grid-cols-[minmax(0,1.5fr)_minmax(420px,1.1fr)] grid-rows-[minmax(0,1fr)_minmax(160px,0.38fr)] gap-3">
+          <div className="grid h-full grid-cols-[minmax(0,1.5fr)_minmax(420px,1.1fr)] grid-rows-[minmax(0,1fr)_minmax(180px,0.42fr)] gap-3">
+            {/* LEFT: Topology — full height */}
             <div className="relative row-span-2 overflow-hidden rounded-[20px] border border-slate-800/60 bg-[#050c19]">
               <PanelHeading
                 title={taskLabels[selectedTask] || 'Cấu trúc'}
@@ -316,29 +328,35 @@ function App() {
               </ErrorBoundary>
             </div>
 
+            {/* TOP-RIGHT: Embedding space */}
             <div className="relative overflow-hidden rounded-[20px] border border-slate-800/60 bg-[#050c19]">
-              <PanelHeading
-                title="Không gian embedding"
-                subtitle={currentPanelMeta.embedding}
-              />
+              <PanelHeading title={selectedTask === 4 ? "Community Evolution" : "Không gian embedding"} />
               <ErrorBoundary>
-                <EmbeddingRouter />
+                <FloatPanel title={selectedTask === 4 ? "Community Evolution" : "Không gian Embedding"}>
+                  <EmbeddingRouter />
+                </FloatPanel>
               </ErrorBoundary>
             </div>
 
+            {/* BOTTOM-RIGHT: Metrics — slightly taller now */}
             <div className="relative overflow-hidden rounded-[20px] border border-slate-800/60 bg-[#050c19]">
-              <PanelHeading
-                title="Chỉ số huấn luyện"
-                subtitle={currentPanelMeta.metrics}
-              />
+              <PanelHeading title="Phân tích & Chỉ số" />
               <ErrorBoundary>
-                {selectedTask === 3 ? (
-                  <div className="h-full flex flex-col overflow-hidden">
-                    <div className="flex-1 min-h-0"><ROCMonitor /></div>
-                  </div>
-                ) : (
-                  <MetricsChart />
-                )}
+                <FloatPanel title={`Phân tích — Task ${selectedTask}`}>
+                  {selectedTask === 1 ? (
+                    <Task1MetricsPanel />
+                  ) : selectedTask === 2 ? (
+                    <Task2MetricsPanel />
+                  ) : selectedTask === 3 ? (
+                    <ROCMonitor />
+                  ) : selectedTask === 4 ? (
+                    <ModularityMonitor />
+                  ) : selectedTask === 5 ? (
+                    <StructurePreservation />
+                  ) : (
+                    <MetricsChart />
+                  )}
+                </FloatPanel>
               </ErrorBoundary>
             </div>
           </div>
@@ -351,6 +369,7 @@ function App() {
       <TrainingControls />
       <ConfigPanel />
       <TrainingReport />
+      <ProjectLibrary isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} />
       
       {isDataInputOpen && <DataInputView onClose={() => setIsDataInputOpen(false)} />}
     </div>

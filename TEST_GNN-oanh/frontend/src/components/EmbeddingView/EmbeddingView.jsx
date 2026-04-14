@@ -2,7 +2,7 @@ import { useMemo, useRef, useEffect, useCallback, useState } from 'react'
 import Plot from 'react-plotly.js'
 import useGNNStore from '../../store/useGNNStore'
 import usePlayerStore from '../../store/playerStore'
-import { CLASS_COLORS } from '../../utils/colors'
+import { CLASS_COLORS, getClassColor } from '../../utils/colors'
 import { easeInOutCubic, interpolateSnapshots } from '../../engine/interpolate'
 
 function computeAxisRange(values, paddingRatio = 0.18, minSpan = 6) {
@@ -154,7 +154,7 @@ export default function EmbeddingView() {
       const { compactness } = getSpreadStats(emb)
       const x = emb.map(p => p[0])
       const y = emb.map(p => p[1])
-      const colors = preds.map(c => CLASS_COLORS[c] || '#94a3b8')
+      const colors = preds.map(c => getClassColor(c))
       const sizes = emb.map((_, i) => (i === hoveredGraphId) ? 16 * compactness : 9 * compactness)
       const opacities = emb.map((_, i) => (i === hoveredGraphId) ? 1.0 : 0.75)
       
@@ -235,7 +235,7 @@ export default function EmbeddingView() {
     const { compactness } = getSpreadStats(emb)
     const x = emb.map((p) => p[0])
     const y = emb.map((p) => p[1])
-    const colors = preds.map((c) => CLASS_COLORS[c] || '#94a3b8')
+    const colors = preds.map(c => getClassColor(c))
     const sizes = emb.map((_, i) => i === selectedNodeId ? 13 * compactness : 7 * compactness)
     const opacities = emb.map((_, i) => i === selectedNodeId ? 1.0 : 0.82)
 
