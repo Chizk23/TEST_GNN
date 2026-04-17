@@ -41,6 +41,7 @@ import ProjectLibrary from './components/Library/ProjectLibrary'
 import Task2MetricsPanel from './components/MetricsChart/Task2MetricsPanel'
 import CommunityEvolution from './components/TopologyView/CommunityEvolution'
 import SidebarButton from './components/ui/SidebarButton'
+import { FeatureImportancePanel, GradientFlowPanel, AttentionVisualization } from './components/Visualization'
 
 // Route to task-specific topology component
 function TopologyRouter() {
