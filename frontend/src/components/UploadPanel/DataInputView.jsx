@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import * as XLSX from 'xlsx'
-import { Network, BarChart3, Link2, Users, Globe2, Dna, Upload, X, CheckCircle2, Sparkles, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react'
+import { Network, BarChart3, Link2, Users, Globe2, Dna, Upload, X, CheckCircle2, Sparkles, ArrowLeft, ArrowRight, Loader2, Clock, Trash2 } from 'lucide-react'
 import useGNNStore from '../../store/useGNNStore'
+import { useToast } from '../Toast'
 
 const TASKS = [
   { id: 1, name: 'Node Classification', Icon: Network, desc: 'Predict labels for nodes (e.g. user roles)', needsGraph: false },
@@ -16,6 +17,9 @@ export default function DataInputView({ onClose }) {
   const [step, setStep] = useState(1)
   const [task, setTask] = useState(1)
   const setMockMode = useGNNStore(s => s.setMockMode)
+  const { success: showSuccess, error: showError, warning: showWarning } = useToast()
+  const [uploadedGraphs, setUploadedGraphs] = useState([])
+  const [loadingUploads, setLoadingUploads] = useState(false)
 
   // File data states
   const [nodesData, setNodesData] = useState([])
@@ -73,7 +77,7 @@ export default function DataInputView({ onClose }) {
           setGraphCols(cols)
         }
       } catch (err) {
-        alert("Error parsing file: " + err.message)
+        showError("Error parsing file: " + err.message, 5000)
       }
     }
     
@@ -174,11 +178,11 @@ export default function DataInputView({ onClose }) {
         useGNNStore.getState().setTaskData({ graphs: graphJson.graphs })
       }
       
-      alert(`Thành công! Đã tải ${configRes.metadata.num_nodes} nút, ${configRes.metadata.num_edges} cạnh, ${configRes.metadata.num_features} đặc trưng, ${configRes.metadata.num_classes} lớp.`)
+      showSuccess(`Thành công! Đã tải ${configRes.metadata.num_nodes} nút, ${configRes.metadata.num_edges} cạnh, ${configRes.metadata.num_features} đặc trưng, ${configRes.metadata.num_classes} lớp.`, 5000)
       
       onClose()
     } catch (e) {
-      alert("Lỗi: " + e.message)
+      showError("Lỗi: " + e.message, 5000)
     } finally {
       setLoading(false)
     }

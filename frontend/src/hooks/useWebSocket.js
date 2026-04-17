@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect } from 'react'
 import useGNNStore from '../store/useGNNStore'
 import usePlayerStore from '../store/playerStore'
+import { useToast } from '../components/Toast'
 
 export default function useWebSocket() {
   const wsRef       = useRef(null)
@@ -8,6 +9,8 @@ export default function useWebSocket() {
   const configRef   = useRef(null)
   const reconnectAttemptsRef = useRef(0)
   const maxReconnectAttempts = 5
+
+  const { error: showError, success: showSuccess, warning: showWarning } = useToast()
 
   const setTraining   = useGNNStore((s) => s.setTraining)
   const setGraphData  = useGNNStore((s) => s.setGraphData)
@@ -80,6 +83,7 @@ export default function useWebSocket() {
       console.log('[WebSocket] Connected')
       statusRef.current = 'connected'
       reconnectAttemptsRef.current = 0 // Reset on successful connection
+      showSuccess('Connected to training server', 3000)
       wsRef.current.send(JSON.stringify(config))
     }
 
@@ -113,6 +117,7 @@ export default function useWebSocket() {
           console.error('[WebSocket] Training error:', msg.message)
           if (msg.traceback) console.error(msg.traceback)
           setTraining(false, 0)
+          showError(`Training Error: ${msg.message}`, 6000)
           
           window.dispatchEvent(new CustomEvent('gnn:training-error', {
             detail: { 
@@ -134,6 +139,7 @@ export default function useWebSocket() {
       console.error('[WebSocket] Connection error:', error)
       statusRef.current = 'error'
       setTraining(false, 0)
+      showError('WebSocket connection error. Retrying...', 5000)
       
       window.dispatchEvent(new CustomEvent('gnn:websocket-error', {
         detail: { 
@@ -171,7 +177,7 @@ export default function useWebSocket() {
       }
     }
   }, [addSnapshot, loadSnapshots, setTraining, setGraphData, setGroundTruth, 
-      setTaskData, setTask5Meta, setDone, attemptReconnect])
+      setTaskData, setTask5Meta, setDone, attemptReconnect, showSuccess, showError])
 
   const disconnect = useCallback(() => {
     console.log('[WebSocket] Disconnecting...')
