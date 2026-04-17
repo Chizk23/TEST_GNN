@@ -2,10 +2,11 @@ import React, { useMemo, useState } from 'react'
 import usePlayerStore from '../../store/playerStore'
 import Plot from 'react-plotly.js'
 import MetricsChart from './MetricsChart'
+import { FeatureImportancePanel, GradientFlowPanel, AttentionVisualization } from '../Visualization'
 
 /**
  * Task1MetricsPanel — Interactive Confusion Matrix with Node Highlighting
- * Tabs: METRICS | CONFUSION MATRIX | OVERSMOOTHING (Dirichlet Energy)
+ * Tabs: METRICS | CONFUSION MATRIX | OVERSMOOTHING | FEATURE IMPORTANCE | GRADIENT FLOW | ATTENTION
  */
 import useGNNStore from '../../store/useGNNStore'
 
@@ -89,6 +90,9 @@ export default function Task1MetricsPanel() {
     { key: 'chart', label: 'Loss / Acc' },
     { key: 'cm', label: 'Confusion Matrix' },
     { key: 'oversmooth', label: 'Oversmoothing' },
+    { key: 'features', label: 'Feature Importance' },
+    { key: 'gradient', label: 'Gradient Flow' },
+    { key: 'attention', label: 'Attention Weights' },
   ]
 
   return (
@@ -103,7 +107,10 @@ export default function Task1MetricsPanel() {
               ${viewMode === t.key
                 ? t.key === 'chart' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                   : t.key === 'cm' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                  : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                  : t.key === 'oversmooth' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                  : t.key === 'features' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                  : t.key === 'gradient' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                 : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
               }`}
           >
@@ -309,6 +316,60 @@ export default function Task1MetricsPanel() {
                   />
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {viewMode === 'features' && (
+          <div className="w-full h-full overflow-y-auto p-3">
+            {snapshots.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs gap-2">
+                <div className="text-4xl opacity-30">📊</div>
+                <p>Bắt đầu huấn luyện để xem Feature Importance</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <FeatureImportancePanel 
+                  data={snapshots[Math.floor(currentEpochFloat)] || snapshots[snapshots.length - 1]} 
+                  epoch={Math.floor(currentEpochFloat)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {viewMode === 'gradient' && (
+          <div className="w-full h-full overflow-y-auto p-3">
+            {snapshots.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs gap-2">
+                <div className="text-4xl opacity-30">⚡</div>
+                <p>Bắt đầu huấn luyện để xem Gradient Flow</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <GradientFlowPanel 
+                  data={snapshots[Math.floor(currentEpochFloat)] || snapshots[snapshots.length - 1]}
+                  epoch={Math.floor(currentEpochFloat)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {viewMode === 'attention' && (
+          <div className="w-full h-full overflow-y-auto p-3">
+            {snapshots.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs gap-2">
+                <div className="text-4xl opacity-30">👁️</div>
+                <p>Bắt đầu huấn luyện để xem Attention Weights</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <AttentionVisualization 
+                  data={snapshots[Math.floor(currentEpochFloat)] || snapshots[snapshots.length - 1]}
+                  epoch={Math.floor(currentEpochFloat)}
+                />
+              </div>
             )}
           </div>
         )}

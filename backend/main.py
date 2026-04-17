@@ -4,6 +4,8 @@ import os
 import traceback
 import numpy as np
 import sys
+import time
+from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -324,30 +326,101 @@ def build_graph_json_flexible(data):
 
 @app.post("/api/upload-graph")
 async def upload_graph(file: UploadFile = File(...)):
-    """Upload a single graph file (.csv, .json, .pt). Returns auto-detected metadata."""
-    import tempfile
-    import os
-
+    """Upload a single graph file (.csv, .json, .pt). Returns auto-detected metadata with persistent storage."""
     if not HAS_TORCH:
         return {"error": "PyTorch is not installed"}
 
-    # Save to temp file
-    suffix = os.path.splitext(file.filename)[1]
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=os.path.join(os.path.dirname(__file__), 'datasets')) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
+    # Create persistent upload directory
+    upload_dir = os.path.join(os.path.dirname(__file__), 'datasets', 'uploads')
+    os.makedirs(upload_dir, exist_ok=True)
+
+    # Create unique filename with timestamp
+    file_stem = Path(file.filename).stem
+    file_ext = Path(file.filename).suffix.lower()
+    timestamp = int(time.time() * 1000)
+    saved_filename = f"{file_stem}_{timestamp}{file_ext}"
+    saved_path = os.path.join(upload_dir, saved_filename)
 
     try:
-        data = load_custom_graph(tmp_path)
+        # Read and save file
+        content = await file.read()
+        with open(saved_path, 'wb') as f:
+            f.write(content)
+        
+        # Load and analyze
+        data = load_custom_graph(saved_path)
         data, metadata = auto_detect_graph(data)
-        # Keep the temp file path for training metadata
-        metadata['file_path'] = tmp_path
-        metadata['filename'] = file.filename
+        
+        # Return with persistent file reference
+        metadata.update({
+            'file_path': saved_path,
+            'upload_id': saved_filename,
+            'original_filename': file.filename,
+            'size_bytes': len(content),
+            'upload_timestamp': timestamp,
+            'can_reload': True,  # File is persistent!
+        })
+        
+        print(f"✓ Graph uploaded: {saved_filename} ({len(content)} bytes)")
+        return metadata
+        
+    except Exception as e:
+        # Clean up on error
+        if os.path.exists(saved_path):
+            os.unlink(saved_path)
+        print(f"✗ Upload failed: {e}")
+        return {"error": str(e), "filename": file.filename}
+
+
+@app.get("/api/uploads")
+async def list_uploaded_graphs():
+    """List all previously uploaded graphs."""
+    upload_dir = os.path.join(os.path.dirname(__file__), 'datasets', 'uploads')
+    if not os.path.exists(upload_dir):
+        return {"uploads": []}
+    
+    files = []
+    try:
+        for filename in os.listdir(upload_dir):
+            filepath = os.path.join(upload_dir, filename)
+            if os.path.isfile(filepath):
+                stat = os.stat(filepath)
+                files.append({
+                    'id': filename,
+                    'name': filename,
+                    'size_bytes': stat.st_size,
+                    'modified_timestamp': int(stat.st_mtime * 1000),
+                    'can_train': True,
+                })
+    except Exception as e:
+        print(f"Error listing uploads: {e}")
+    
+    # Sort by most recent first
+    files.sort(key=lambda x: x['modified_timestamp'], reverse=True)
+    return {"uploads": files, "total": len(files)}
+
+
+@app.get("/api/datasets/upload/{upload_id}")
+async def get_uploaded_graph(upload_id: str):
+    """Retrieve metadata for a previously uploaded graph."""
+    upload_dir = os.path.join(os.path.dirname(__file__), 'datasets', 'uploads')
+    filepath = os.path.join(upload_dir, upload_id)
+    
+    # Security: prevent directory traversal
+    if not os.path.abspath(filepath).startswith(os.path.abspath(upload_dir)):
+        return {"error": "Invalid upload ID"}
+    
+    if not os.path.exists(filepath):
+        return {"error": f"Upload not found: {upload_id}"}
+    
+    try:
+        data = load_custom_graph(filepath)
+        data, metadata = auto_detect_graph(data)
+        metadata['file_path'] = filepath
+        metadata['upload_id'] = upload_id
         return metadata
     except Exception as e:
-        os.unlink(tmp_path)
-        return {"error": str(e)}
+        return {"error": f"Failed to load graph: {e}"}
 
 
 @app.get("/api/export-embedding/{fmt}")

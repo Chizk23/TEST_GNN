@@ -10,6 +10,60 @@ import torch.nn.functional as F
 from sklearn.decomposition import PCA
 
 
+def compute_feature_importance(model, x, edge_index, device):
+    """
+    Compute per-node feature importance using gradient-based attribution.
+    Identifies which input features contributed most to each node's prediction.
+    """
+    x_attr = x.clone().detach().requires_grad_(True).to(device)
+    
+    with torch.enable_grad():
+        logits = model(x_attr, edge_index)[0]
+        pred_probs = torch.softmax(logits, dim=1)
+    
+    importances = []
+    for node_id in range(x.size(0)):
+        pred_class = logits[node_id].argmax().item()
+        score = pred_probs[node_id, pred_class]
+        
+        if x_attr.grad is not None:
+            x_attr.grad.zero_()
+        
+        score.backward(retain_graph=True)
+        
+        node_importance = x_attr.grad[node_id].abs().cpu().tolist() if x_attr.grad is not None else [0.0] * x.size(1)
+        top_features = sorted(enumerate(node_importance), key=lambda idx_val: idx_val[1], reverse=True)[:5]
+        
+        importances.append({
+            'node_id': node_id,
+            'importance': node_importance,
+            'top_features': [[int(idx), float(val)] for idx, val in top_features]
+        })
+    
+    return importances
+
+
+def analyze_gradient_flow(model):
+    """
+    Track gradient magnitude through layers to identify vanishing/exploding gradients.
+    """
+    gradient_stats = {}
+    
+    for name, param in model.named_parameters():
+        if param.grad is not None:
+            grad_norm = param.grad.data.norm().item()
+            param_norm = param.data.norm().item()
+            gradient_stats[name] = {
+                'grad_norm': float(grad_norm),
+                'param_norm': float(param_norm),
+                'grad_ratio': float(grad_norm / (param_norm + 1e-8)),
+                'is_vanishing': bool(grad_norm < 1e-6),
+                'is_exploding': bool(grad_norm > 100.0)
+            }
+    
+    return gradient_stats
+
+
 async def run_node_classification(config, data, model, optimizer, websocket, stop_flag):
     """
     Main training loop for node classification.
@@ -97,10 +151,14 @@ async def run_node_classification(config, data, model, optimizer, websocket, sto
                     neighbors[tgt].append(src)
             
             # Compute majority neighbor class
+            from collections import Counter
             neighbor_majority = []
+            neighbor_agreement = []
+            
             for node_id in range(num_nodes):
                 if len(neighbors[node_id]) == 0:
                     neighbor_majority.append({'majority_class': -1, 'majority_ratio': 0.0, 'total_neighbors': 0})
+                    neighbor_agreement.append(0)
                     continue
                 
                 # Count classes among neighbors
@@ -119,9 +177,32 @@ async def run_node_classification(config, data, model, optimizer, websocket, sto
                     'majority_ratio': float(majority_ratio),
                     'total_neighbors': len(neighbors[node_id])
                 })
+                
+                # Check if this node agrees with its neighbors' majority
+                node_pred = pred_list[node_id]
+                agrees = 1 if node_pred == majority_class else 0
+                neighbor_agreement.append(agrees)
         except Exception as e:
             print(f"Neighbor context computation failed: {e}")
             neighbor_majority = [{'majority_class': -1, 'majority_ratio': 0.0, 'total_neighbors': 0}] * data.x.size(0)
+
+        # ── Phase 2: Feature Importance & Gradient Flow ────────────────────
+        feature_importance_data = None
+        gradient_flow_data = None
+        
+        try:
+            # Compute feature importance (gradient-based attribution)
+            feature_importance_data = compute_feature_importance(model, data.x, data.edge_index, data.x.device)
+        except Exception as e:
+            print(f"Feature importance computation failed: {e}")
+            feature_importance_data = []
+        
+        try:
+            # Analyze gradient flow through layers
+            gradient_flow_data = analyze_gradient_flow(model)
+        except Exception as e:
+            print(f"Gradient flow analysis failed: {e}")
+            gradient_flow_data = {}
 
         # ── Build Snapshot ──────────────────────────────────────────────────
         snapshot = {
@@ -131,6 +212,7 @@ async def run_node_classification(config, data, model, optimizer, websocket, sto
             'node_confidence': node_confidence,
             'node_correctness': node_correctness,
             'neighbor_majority': neighbor_majority,
+            'neighbor_agreement': neighbor_agreement,
             'embeddings_2d': emb_2d,
             'attention_weights': attn_data,
             'train_loss': float(loss.item()),
@@ -138,6 +220,8 @@ async def run_node_classification(config, data, model, optimizer, websocket, sto
             'train_acc': float(train_acc.item()),
             'val_acc': float(val_acc.item()),
             'dirichlet_energy': dirichlet_energy,
+            'feature_importance': feature_importance_data,
+            'gradient_flow': gradient_flow_data,
         }
         epoch_snapshots.append(snapshot)
 
