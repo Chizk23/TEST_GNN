@@ -97,10 +97,14 @@ async def run_node_classification(config, data, model, optimizer, websocket, sto
                     neighbors[tgt].append(src)
             
             # Compute majority neighbor class
+            from collections import Counter
             neighbor_majority = []
+            neighbor_agreement = []
+            
             for node_id in range(num_nodes):
                 if len(neighbors[node_id]) == 0:
                     neighbor_majority.append({'majority_class': -1, 'majority_ratio': 0.0, 'total_neighbors': 0})
+                    neighbor_agreement.append(0)
                     continue
                 
                 # Count classes among neighbors
@@ -119,6 +123,11 @@ async def run_node_classification(config, data, model, optimizer, websocket, sto
                     'majority_ratio': float(majority_ratio),
                     'total_neighbors': len(neighbors[node_id])
                 })
+                
+                # Check if this node agrees with its neighbors' majority
+                node_pred = pred_list[node_id]
+                agrees = 1 if node_pred == majority_class else 0
+                neighbor_agreement.append(agrees)
         except Exception as e:
             print(f"Neighbor context computation failed: {e}")
             neighbor_majority = [{'majority_class': -1, 'majority_ratio': 0.0, 'total_neighbors': 0}] * data.x.size(0)
@@ -131,6 +140,7 @@ async def run_node_classification(config, data, model, optimizer, websocket, sto
             'node_confidence': node_confidence,
             'node_correctness': node_correctness,
             'neighbor_majority': neighbor_majority,
+            'neighbor_agreement': neighbor_agreement,
             'embeddings_2d': emb_2d,
             'attention_weights': attn_data,
             'train_loss': float(loss.item()),

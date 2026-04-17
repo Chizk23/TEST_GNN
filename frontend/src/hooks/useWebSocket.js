@@ -8,7 +8,6 @@ export default function useWebSocket() {
   const configRef   = useRef(null)
   const reconnectAttemptsRef = useRef(0)
   const maxReconnectAttempts = 5
-  const reconnectDelay = 2000 // 2 seconds
 
   const setTraining   = useGNNStore((s) => s.setTraining)
   const setGraphData  = useGNNStore((s) => s.setGraphData)
@@ -20,106 +19,164 @@ export default function useWebSocket() {
   const loadSnapshots = usePlayerStore((s) => s.loadSnapshots)
   const setDone       = usePlayerStore((s) => s.setDone)
 
+  // Calculate exponential backoff delay
+  const getReconnectDelay = useCallback((attemptNumber) => {
+    const baseDelay = 1000 // 1 second
+    const maxDelay = 30000 // 30 seconds
+    const delay = Math.min(baseDelay * Math.pow(2, attemptNumber), maxDelay)
+    return delay
+  }, [])
+
   const attemptReconnect = useCallback(() => {
     if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached')
-      statusRef.current = 'disconnected'
+      console.error(`[WebSocket] Max reconnection attempts (${maxReconnectAttempts}) reached`)
+      statusRef.current = 'failed'
       setTraining(false, 0)
+      
+      // Emit event for UI to show error
+      window.dispatchEvent(new CustomEvent('gnn:connection-failed', {
+        detail: { 
+          attempts: maxReconnectAttempts,
+          lastError: 'Could not reconnect to training server',
+          userAction: 'Switch to Mock Mode or check backend server'
+        }
+      }))
       return
     }
 
-    reconnectAttemptsRef.current += 1
-    console.log(`Attempting to reconnect (${reconnectAttemptsRef.current}/${maxReconnectAttempts})...`)
+    const attemptNum = reconnectAttemptsRef.current
+    const delay = getReconnectDelay(attemptNum)
+    
+    console.log(`[WebSocket] Attempting to reconnect (${attemptNum + 1}/${maxReconnectAttempts}) in ${delay}ms...`)
     
     setTimeout(() => {
       if (configRef.current) {
         connect(configRef.current)
       }
-    }, reconnectDelay)
-  }, [setTraining])
+    }, delay)
+  }, [setTraining, getReconnectDelay, maxReconnectAttempts])
 
   const connect = useCallback((config) => {
+    console.log('[WebSocket] Initiating connection...')
+    
     // Store config for reconnection
     configRef.current = config
     reconnectAttemptsRef.current = 0
 
     const wsUrl = 'ws://localhost:8000/ws/train'
-    wsRef.current = new WebSocket(wsUrl)
+    
+    try {
+      wsRef.current = new WebSocket(wsUrl)
+    } catch (e) {
+      console.error('[WebSocket] Failed to create WebSocket:', e)
+      statusRef.current = 'failed'
+      setTraining(false, 0)
+      return
+    }
+
     statusRef.current = 'connecting'
 
     wsRef.current.onopen = () => {
+      console.log('[WebSocket] Connected')
       statusRef.current = 'connected'
+      reconnectAttemptsRef.current = 0 // Reset on successful connection
       wsRef.current.send(JSON.stringify(config))
     }
 
     wsRef.current.onmessage = (event) => {
-      const msg = JSON.parse(event.data)
+      try {
+        const msg = JSON.parse(event.data)
 
-      if (msg.type === 'graph_data') {
-        const d = msg.data
+        if (msg.type === 'graph_data') {
+          const d = msg.data
+          if (d.graphData) setGraphData(d.graphData)
+          if (d.groundTruth) setGroundTruth(d.groundTruth)
+          if (d.graphs) setTaskData({ graphs: d.graphs })
+          if (d.testEdges && !d.graphs) setTaskData({ testEdges: d.testEdges })
 
-        // Task 1 & 3: node-level graph structure
-        if (d.graphData) {
-          setGraphData(d.graphData)
+        } else if (msg.type === 'graph_metadata') {
+          setTask5Meta(msg.data)
+
+        } else if (msg.type === 'epoch_snapshot') {
+          addSnapshot(msg.data)
+          setTraining(true, msg.progress)
+
+        } else if (msg.type === 'training_complete') {
+          console.log('[WebSocket] Training complete, loading snapshots...')
+          if (msg.all_snapshots && msg.all_snapshots.length > 0) {
+            loadSnapshots(msg.all_snapshots)
+          }
+          setTraining(false, 1)
+          setDone(msg.all_snapshots?.length - 1 || 0)
+
+        } else if (msg.type === 'error') {
+          console.error('[WebSocket] Training error:', msg.message)
+          if (msg.traceback) console.error(msg.traceback)
+          setTraining(false, 0)
+          
+          window.dispatchEvent(new CustomEvent('gnn:training-error', {
+            detail: { 
+              message: msg.message,
+              traceback: msg.traceback,
+              userAction: 'Check backend logs and try again'
+            }
+          }))
+
+        } else if (msg.type === 'ping') {
+          // Keepalive ping - ignore
         }
-        // Task 1 & 3: ground truth node labels
-        if (d.groundTruth) {
-          setGroundTruth(d.groundTruth)
-        }
-        // Task 2: synthetic graphs list
-        if (d.graphs) {
-          setTaskData({ graphs: d.graphs })
-        }
-        // Task 3: test edges for link prediction (merged with graphs if both present)
-        if (d.testEdges && !d.graphs) {
-          setTaskData({ testEdges: d.testEdges })
-        }
-
-      } else if (msg.type === 'graph_metadata') {
-        // Task 5: auto-detected graph properties
-        setTask5Meta(msg.data)
-
-      } else if (msg.type === 'epoch_snapshot') {
-        addSnapshot(msg.data)
-        setTraining(true, msg.progress)
-
-      } else if (msg.type === 'training_complete') {
-        // Always load the complete snapshots from backend to ensure consistency
-        // This prevents race conditions where late epoch_snapshots might arrive
-        if (msg.all_snapshots && msg.all_snapshots.length > 0) {
-          loadSnapshots(msg.all_snapshots)
-        }
-        setTraining(false, 1)
-        // Don't auto-seek to 0 - let user stay at the latest epoch they were watching
-        setDone(msg.all_snapshots.length - 1)
-
-      } else if (msg.type === 'error') {
-        console.error('Training error:', msg.message)
-        console.error(msg.traceback)
-        setTraining(false, 0)
-
-      } else if (msg.type === 'ping') {
-        // Keepalive, ignore
+      } catch (e) {
+        console.error('[WebSocket] Failed to parse message:', e)
       }
     }
 
-    wsRef.current.onerror = () => {
-      statusRef.current = 'disconnected'
+    wsRef.current.onerror = (error) => {
+      console.error('[WebSocket] Connection error:', error)
+      statusRef.current = 'error'
       setTraining(false, 0)
+      
+      window.dispatchEvent(new CustomEvent('gnn:websocket-error', {
+        detail: { 
+          error: error?.message || 'Unknown error',
+          userAction: 'Connection will retry automatically'
+        }
+      }))
     }
 
     wsRef.current.onclose = (event) => {
+      console.log(`[WebSocket] Closed (code: ${event.code})`)
       statusRef.current = 'disconnected'
-      // Auto-reconnect if connection was lost unexpectedly (code 1006 = abnormal closure)
-      if (event.code === 1006 && configRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
+      
+      // Normal close (code 1000) - don't reconnect
+      if (event.code === 1000) {
+        console.log('[WebSocket] Connection closed normally')
+        return
+      }
+      
+      // Abnormal closure - attempt reconnect
+      if (configRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
+        reconnectAttemptsRef.current += 1
+        console.log('[WebSocket] Abnormal closure detected, attempting reconnect...')
         attemptReconnect()
+      } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+        // Already emitted in attemptReconnect
+      } else {
+        window.dispatchEvent(new CustomEvent('gnn:connection-closed', {
+          detail: { 
+            code: event.code, 
+            reason: event.reason || 'No reason provided',
+            userAction: 'Click Retry or switch to Mock Mode'
+          }
+        }))
       }
     }
-  }, [addSnapshot, loadSnapshots, setTraining, setGraphData, setGroundTruth, setTaskData, setTask5Meta, setDone, attemptReconnect])
+  }, [addSnapshot, loadSnapshots, setTraining, setGraphData, setGroundTruth, 
+      setTaskData, setTask5Meta, setDone, attemptReconnect])
 
   const disconnect = useCallback(() => {
+    console.log('[WebSocket] Disconnecting...')
     if (wsRef.current) {
-      wsRef.current.close()
+      wsRef.current.close(1000) // Normal closure
       wsRef.current = null
     }
     statusRef.current = 'disconnected'
@@ -128,6 +185,8 @@ export default function useWebSocket() {
   const send = useCallback((data) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data))
+    } else {
+      console.warn('[WebSocket] Cannot send - connection not open')
     }
   }, [])
 
