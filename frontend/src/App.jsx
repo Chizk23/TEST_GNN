@@ -27,9 +27,9 @@ import InductiveDemo from './components/TopologyView/InductiveDemo'
 import ReadoutMonitor from './components/TopologyView/ReadoutMonitor'
 import Task3MetricsPanel from './components/MetricsChart/Task3MetricsPanel'
 import Task4MetricsPanel from './components/MetricsChart/Task4MetricsPanel'
+import Task5MetricsPanel from './components/MetricsChart/Task5MetricsPanel'
 import Task4CommunityInspector from './components/TopologyView/Task4CommunityInspector'
 import EmbeddingSpaceB from './components/TopologyView/EmbeddingSpaceB'
-import StructurePreservation from './components/TopologyView/StructurePreservation'
 import Task5NodeInspector from './components/TopologyView/Task5NodeInspector'
 import LatentSpaceView from './components/TopologyView/LatentSpaceView'
 import ValidityMonitor from './components/TopologyView/ValidityMonitor'
@@ -244,7 +244,6 @@ function App() {
   const mockMode = useGNNStore((s) => s.mockMode)
   const setMockMode = useGNNStore((s) => s.setMockMode)
   const setConfigOpen = useGNNStore((s) => s.setConfigOpen)
-  const setReportOpen = useGNNStore((s) => s.setReportOpen)
   const isTraining = useGNNStore((s) => s.isTraining)
   const snapshots = usePlayerStore((s) => s.snapshots)
   const currentEpoch = usePlayerStore((s) => s.currentEpoch)
@@ -288,12 +287,13 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Auto-popup của TrainingReport đã bị gỡ theo yêu cầu — nó làm phiền mỗi lần
+  // người dùng bấm Run hoặc chuyển task. Report giờ chỉ mở khi user bấm nút.
   useEffect(() => {
     if (!isTraining && trainingDone && snapshots.length > 0 && reportVersion > lastReportVersionRef.current) {
       lastReportVersionRef.current = reportVersion
-      setReportOpen(true)
     }
-  }, [isTraining, trainingDone, snapshots.length, reportVersion, setReportOpen])
+  }, [isTraining, trainingDone, snapshots.length, reportVersion])
 
   const valAcc = snapshot ? (snapshot.val_acc * 100).toFixed(1) : '--'
   const trainLoss = snapshot ? snapshot.train_loss.toFixed(3) : '--'
@@ -428,7 +428,7 @@ function App() {
                              selectedTask === 2 ? <Task2MetricsPanel /> :
                              selectedTask === 3 ? <Task3MetricsPanel /> :
                              selectedTask === 4 ? <Task4MetricsPanel /> :
-                             selectedTask === 5 ? <StructurePreservation /> :
+                             selectedTask === 5 ? <Task5MetricsPanel /> :
                              <MetricsChart />}
                           </ErrorBoundary>
                         </motion.div>
