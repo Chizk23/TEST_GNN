@@ -129,27 +129,38 @@ function BridgesTab({ snap, onFocus }) {
   return (
     <div className="flex-1 overflow-auto space-y-1.5">
       <div className="text-nano text-slate-500 uppercase font-bold tracking-ultra">Top Bridges · sorted by strength</div>
-      {bridges.map((b) => (
-        <button
-          key={b.id}
-          onClick={() => onFocus(b.community)}
-          className="w-full flex items-center gap-2 bg-slate-900/40 hover:bg-slate-900/70 rounded-md px-2 py-1.5 border border-slate-800/50 transition-colors"
-          title={`Focus community C${b.community}`}
-        >
-          <div className="w-6 h-6 rounded-sm flex items-center justify-center bg-slate-800 text-nano font-bold text-slate-100 shrink-0">
-            {b.id}
-          </div>
-          <div className="h-1.5 flex-1 bg-slate-800/60 rounded-full overflow-hidden">
-            <div className="h-full bg-white/60" style={{ width: `${Math.max(0, Math.min(1, b.strength)) * 100}%` }} />
-          </div>
-          <span className="text-nano font-mono font-bold text-slate-200 tabular-nums shrink-0">
-            {b.strength.toFixed(2)}
-          </span>
-          <span className="text-nano font-mono text-slate-500 shrink-0" style={{ color: COMMUNITY_COLORS[b.community % COMMUNITY_COLORS.length] }}>
-            C{b.community}
-          </span>
-        </button>
-      ))}
+      {bridges.map((b) => {
+        // Bridges may lack a prediction early in training. Render them as
+        // informational rows (no click handler) so we never call
+        // `setSelectedCommunity(null)` and never show "Cnull".
+        const hasCommunity = b.community != null && Number.isFinite(b.community)
+        const label = hasCommunity ? `C${b.community}` : 'C?'
+        const color = hasCommunity ? COMMUNITY_COLORS[b.community % COMMUNITY_COLORS.length] : '#64748b'
+        return (
+          <button
+            key={b.id}
+            onClick={hasCommunity ? () => onFocus(b.community) : undefined}
+            disabled={!hasCommunity}
+            className={`w-full flex items-center gap-2 bg-slate-900/40 rounded-md px-2 py-1.5 border border-slate-800/50 transition-colors ${
+              hasCommunity ? 'hover:bg-slate-900/70 cursor-pointer' : 'opacity-70 cursor-default'
+            }`}
+            title={hasCommunity ? `Focus community ${label}` : 'No community prediction yet'}
+          >
+            <div className="w-6 h-6 rounded-sm flex items-center justify-center bg-slate-800 text-nano font-bold text-slate-100 shrink-0">
+              {b.id}
+            </div>
+            <div className="h-1.5 flex-1 bg-slate-800/60 rounded-full overflow-hidden">
+              <div className="h-full bg-white/60" style={{ width: `${Math.max(0, Math.min(1, b.strength)) * 100}%` }} />
+            </div>
+            <span className="text-nano font-mono font-bold text-slate-200 tabular-nums shrink-0">
+              {b.strength.toFixed(2)}
+            </span>
+            <span className="text-nano font-mono text-slate-500 shrink-0" style={{ color }}>
+              {label}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
