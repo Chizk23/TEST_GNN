@@ -27,6 +27,7 @@ const useGNNStore = create((set, get) => ({
   // ─── Selection / UI ──────────────────────────────────────────
   selectedNodeId: null,
   hoveredGraphId: null,
+  selectedCommunityId: null, // Task 4 — community selected via canvas click / metric table
   viewMode: 'prediction',
   attentionHead: 'avg',
   configOpen: false,
@@ -58,6 +59,7 @@ const useGNNStore = create((set, get) => ({
       trainingProgress: 0,
       selectedNodeId: null,
       selectedTargetNodeId: null,
+      selectedCommunityId: null,
       // Clear data only if moving to/from tasks with incompatible graph formats
       ...(needsReset ? {
         graphData: null,
@@ -78,6 +80,7 @@ const useGNNStore = create((set, get) => ({
       trainMask: null,
       taskData: null,
       selectedNodeId: null,
+      selectedCommunityId: null,
       isTraining: false,
       trainingProgress: 0,
     })
@@ -99,6 +102,7 @@ const useGNNStore = create((set, get) => ({
     }
   },
   setSelectedTargetNode: (id) => set({ selectedTargetNodeId: id }),
+  setSelectedCommunity: (id) => set({ selectedCommunityId: id }),
 
   addInductiveNode: (newNode) => {
     const { graphData } = get()
