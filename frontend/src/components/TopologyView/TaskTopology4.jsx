@@ -4,6 +4,7 @@ import useGNNStore from '../../store/useGNNStore'
 import usePlayerStore from '../../store/playerStore'
 import { polygonHull } from 'd3-polygon'
 import { normalizeCommunityCenters } from '../../utils/task4Metrics'
+import NodeHoverCard from './NodeHoverCard'
 
 const COMMUNITY_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7', '#06b6d4', '#ec4899']
 // Reference anchors on a 600-unit world. They are re-scaled to the live
@@ -201,6 +202,9 @@ export default function TaskTopology4() {
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-slate-950 overflow-hidden">
+      {/* Universal Node Hover Card */}
+      <NodeHoverCard />
+      
       <ForceGraph2D
         ref={fgRef}
         graphData={graphData}

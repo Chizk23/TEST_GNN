@@ -4,6 +4,7 @@ import useGNNStore from '../../store/useGNNStore'
 import usePlayerStore from '../../store/playerStore'
 import { easeInOutCubic, lerp } from '../../engine/interpolate'
 import { CLASS_COLORS } from '../../utils/colors'
+import NodeHoverCard from './NodeHoverCard'
 
 // Smooth color interpolation for edges
 function getLinkColor(score) {
@@ -230,6 +231,9 @@ export default function TaskTopology3() {
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-slate-950 overflow-hidden">
+      {/* Universal Node Hover Card */}
+      <NodeHoverCard />
+      
       <ForceGraph2D
         ref={fgRef}
         graphData={activeGraphData}

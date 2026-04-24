@@ -3,6 +3,7 @@ import ForceGraph2D from 'react-force-graph-2d'
 import useGNNStore from '../../store/useGNNStore'
 import usePlayerStore from '../../store/playerStore'
 import { CLASS_COLORS } from '../../utils/colors'
+import NodeHoverCard from './NodeHoverCard'
 
 const EDGE_COLOR_COLD = [6, 182, 212]
 const EDGE_COLOR_MID = [234, 179, 8]
@@ -275,6 +276,9 @@ export default function TaskTopology5() {
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-slate-950 overflow-hidden">
+      {/* Universal Node Hover Card */}
+      <NodeHoverCard />
+      
       {sizeMode === 'too_large' ? (
         <div className="w-full h-full flex items-center justify-center text-slate-400">
           <div className="text-center max-w-md px-6">

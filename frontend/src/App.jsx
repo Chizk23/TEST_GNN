@@ -43,6 +43,7 @@ import Task2MetricsPanel from './components/MetricsChart/Task2MetricsPanel'
 import Task6MetricsPanel from './components/MetricsChart/Task6MetricsPanel'
 import CommunityEvolution from './components/TopologyView/CommunityEvolution'
 import SidebarButton from './components/ui/SidebarButton'
+import LeftSidebar from './components/LeftSidebar'
 
 // Route to task-specific topology component
 function TopologyRouter() {
@@ -373,22 +374,10 @@ function App() {
 
       {/* ═══ Main Workspace ═══ */}
       <main className="flex-1 flex overflow-hidden relative bg-[#020617] min-h-0">
-        {/* Floating Sidebar Overlay */}
-        <div className={`absolute left-0 top-0 bottom-0 z-40 transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-[56px]' : 'w-[200px]'}`}>
-          <AppSidebar
-            collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-            activeTab={activeRightTab}
-            setActiveRightTab={setActiveRightTab}
-            rightPanelOpen={rightPanelOpen}
-            setRightPanelOpen={setRightPanelOpen}
-            onOpenLibrary={() => setIsLibraryOpen(true)}
-            onOpenDataInput={() => setIsDataInputOpen(true)}
-            onOpenConfig={() => setConfigOpen(true)}
-          />
-        </div>
+        {/* Left Sidebar — Task/Model selection + quick stats */}
+        <LeftSidebar />
 
-        {/* Full-width content area (Sidebar is an overlay) */}
+        {/* Main content area */}
         <div className="flex-1 flex min-w-0 h-full relative">
           <ResizableWorkspace
             rightPanelOpen={rightPanelOpen}

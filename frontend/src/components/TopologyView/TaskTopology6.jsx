@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react'
 import usePlayerStore from '../../store/playerStore'
 import useGNNStore from '../../store/useGNNStore'
+import NodeHoverCard from './NodeHoverCard'
 import { filterGraphsBy } from '../../utils/task6Metrics.js'
 import {
   classifyGraphShape,
@@ -193,6 +194,9 @@ export default function TaskTopology6() {
 
   return (
     <div className="w-full h-full overflow-y-auto p-6 bg-slate-950 custom-scrollbar">
+      {/* Universal Node Hover Card */}
+      <NodeHoverCard />
+      
       <div className="flex flex-wrap items-center gap-3 mb-3">
         <div className="flex items-center gap-2 bg-slate-900/60 border border-white/5 px-3 py-2 rounded-xl">
           <span className="text-nano text-slate-500 font-black uppercase tracking-ultra">Valid</span>
