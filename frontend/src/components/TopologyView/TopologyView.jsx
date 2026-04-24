@@ -10,6 +10,7 @@ import { drawTask1Node } from '../../engine/drawTask1Node'
 import { computeKHopNeighbors } from '../../utils/khop'
 import { isNodeMisclassified, countMisclassified } from '../../utils/misclassification'
 import { logger } from '../../utils/logger'
+import NodeHoverCard from './NodeHoverCard'
 
 export default function TopologyView() {
   // 1. Dữ liệu tĩnh
@@ -637,6 +638,9 @@ export default function TopologyView() {
             </div>
           </div>
         )}
+
+        {/* Universal Node Hover Card */}
+        <NodeHoverCard />
       </div>
     </div>
   )

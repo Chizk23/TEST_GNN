@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react'
 import ForceGraph2D from 'react-force-graph-2d'
 import useGNNStore from '../../store/useGNNStore'
 import usePlayerStore from '../../store/playerStore'
+import NodeHoverCard from './NodeHoverCard'
 
 const GRAPH_LABELS = ['Dense Structure', 'Sparse Network']
 
@@ -202,6 +203,9 @@ export default function TaskTopology2() {
   if (showDetail) {
     return (
       <div key="detail_view" className="w-full h-full relative bg-panel overflow-hidden">
+        {/* Universal Node Hover Card */}
+        <NodeHoverCard />
+        
         <div className="absolute inset-0" style={{ zIndex: 1 }}>
           <ForceGraph2D
             ref={fgRefDetail}
